@@ -1,6 +1,7 @@
 // screens/roster_input_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/roster_models.dart';
@@ -154,6 +155,68 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
+  // Paste from clipboard
+  void _pasteFromClipboard() async {
+    try {
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      if (clipboardData != null &&
+          clipboardData.text != null &&
+          clipboardData.text!.isNotEmpty) {
+        setState(() {
+          _jsonController.text = clipboardData.text!;
+          _hasText = true;
+          _errorMessage = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.content_paste, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Text('Aus Zwischenablage eingefügt'),
+              ],
+            ),
+            backgroundColor: Color(0xFF1976D2),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Text('Zwischenablage ist leer'),
+              ],
+            ),
+            backgroundColor: Color(0xFFFF8F00),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error pasting from clipboard: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Text('Fehler beim Einfügen: $e'),
+            ],
+          ),
+          backgroundColor: Color(0xFFE30613),
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _parseAndNavigate() {
     try {
       final jsonText = _jsonController.text.trim();
@@ -267,7 +330,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                         ),
                         SizedBox(height: 12),
                         Text(
-                          'Ground Staff Roster System',
+                          'Crew Roster System',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[700],
@@ -316,27 +379,98 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                           ),
                         ],
                       ),
-                      padding: EdgeInsets.all(16),
-                      child: TextField(
-                        controller: _jsonController,
-                        maxLines: null,
-                        expands: true,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          hintText:
-                              '{\n  "type": "MonthJournalData",\n  "data": {\n    "columns": {\n      ...\n    }\n  }\n}',
-                          hintStyle: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 13,
-                            fontFamily: 'Courier',
+                      child: Column(
+                        children: [
+                          // Clipboard paste button
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Color(0xFFE30613).withOpacity(0.05),
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(14),
+                                topRight: Radius.circular(14),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.content_paste,
+                                  size: 16,
+                                  color: Color(0xFFE30613),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'JSON-Daten:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFE30613),
+                                  ),
+                                ),
+                                Spacer(),
+                                InkWell(
+                                  onTap: _pasteFromClipboard,
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFE30613),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.content_paste,
+                                          size: 14,
+                                          color: Colors.white,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Einfügen',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'Courier',
-                          height: 1.4,
-                        ),
-                        textAlignVertical: TextAlignVertical.top,
+                          // Text input field
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: TextField(
+                                controller: _jsonController,
+                                maxLines: null,
+                                expands: true,
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText:
+                                      '{\n  "type": "MonthJournalData",\n  "data": {\n    "columns": {\n      ...\n    }\n  }\n}',
+                                  hintStyle: TextStyle(
+                                    color: Colors.grey[400],
+                                    fontSize: 13,
+                                    fontFamily: 'Courier',
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontFamily: 'Courier',
+                                  height: 1.4,
+                                ),
+                                textAlignVertical: TextAlignVertical.top,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
