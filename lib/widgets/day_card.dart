@@ -109,7 +109,7 @@ class DayCard extends StatelessWidget {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            '${dayNumber}. Juli 2024',
+                            '${dayNumber}. Juli 2025',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],

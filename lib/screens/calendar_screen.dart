@@ -114,7 +114,7 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   String _generateTextReport(List<WorkDay> days) {
     final buffer = StringBuffer();
-    buffer.writeln('AUSTRIAN AIRLINES - KALENDER JULI 2024');
+    buffer.writeln('AUSTRIAN AIRLINES - KALENDER JULI 2025');
     buffer.writeln('=' * 50);
     buffer.writeln();
 

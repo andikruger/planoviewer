@@ -66,7 +66,7 @@ class PDFExportService {
       // Create filename with timestamp
       final timestamp =
           DateTime.now().toString().replaceAll(':', '-').substring(0, 19);
-      final filename = 'Austrian_Airlines_Dienstplan_Juli_2024_$timestamp.pdf';
+      final filename = 'Austrian_Airlines_Dienstplan_Juli_2025_$timestamp.pdf';
 
       // Create download link and trigger download
       final anchor = html.AnchorElement(href: url)
@@ -153,7 +153,7 @@ class PDFExportService {
       // Create filename with timestamp
       final timestamp =
           DateTime.now().toString().replaceAll(':', '-').substring(0, 19);
-      final filename = 'Austrian_Airlines_Dienstplan_Juli_2024_$timestamp.pdf';
+      final filename = 'Austrian_Airlines_Dienstplan_Juli_2025_$timestamp.pdf';
       final file = File('${directory.path}/$filename');
 
       // Save the PDF
@@ -230,7 +230,7 @@ class PDFExportService {
                     ],
                   ),
                   pw.Text(
-                    'DIENSTPLAN JULI 2024',
+                    'DIENSTPLAN JULI 2025',
                     style: pw.TextStyle(
                       fontSize: 18,
                       fontWeight: pw.FontWeight.bold,
@@ -254,7 +254,7 @@ class PDFExportService {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'CREW INFORMATION',
+                    'STAFF INFORMATION',
                     style: pw.TextStyle(
                         fontSize: 16, fontWeight: pw.FontWeight.bold),
                   ),
@@ -269,8 +269,8 @@ class PDFExportService {
                   pw.SizedBox(height: 5),
                   pw.Row(
                     children: [
-                      pw.Expanded(child: pw.Text('Abteilung: Cabin Crew')),
-                      pw.Expanded(child: pw.Text('Periode: Juli 2024')),
+                      pw.Expanded(child: pw.Text('Abteilung: O/GPO')),
+                      pw.Expanded(child: pw.Text('Periode: Juli 2025')),
                     ],
                   ),
                 ],
@@ -465,7 +465,7 @@ class PDFExportService {
                         fontSize: 8, color: PdfColor.fromHex('#666666')),
                   ),
                   pw.Text(
-                    'Austrian Airlines Crew Roster System v1.0',
+                    'Austrian Airlines Ground Staff Roster System v1.0',
                     style: pw.TextStyle(
                         fontSize: 8, color: PdfColor.fromHex('#666666')),
                   ),

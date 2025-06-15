@@ -267,7 +267,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                         ),
                         SizedBox(height: 12),
                         Text(
-                          'Crew Roster System',
+                          'Ground Staff Roster System',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[700],
