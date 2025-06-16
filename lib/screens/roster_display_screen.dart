@@ -59,10 +59,13 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
     print('Should show filtered view: ${DateTime.now().day < 15}');
   }
 
-  void _exportRosterToPDF() async {
-    final pdfService = PDFExportService();
-    await pdfService.exportRosterToPDF(context, widget.rosterData);
-  }
+void _exportRosterToPDF() async {
+  final pdfService = PDFExportService(
+    startDate: widget.startDate,
+    endDate: widget.endDate,
+  );
+  await pdfService.exportRosterToPDF(context, widget.rosterData);
+}
 
   @override
   Widget build(BuildContext context) {
