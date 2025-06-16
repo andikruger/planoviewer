@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:planoviewer/widgets/api_token_dialog.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -20,12 +21,13 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   bool _hasText = false;
   bool _isLoading = false;
   bool _isInitializing = true;
+  String? _currentApiToken;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
   // SharedPreferences keys
-  static const String _rosterDataKey = 'saved_roster'; // Use existing key
-  static const String _apiTokenKey = 'api_token'; // Use existing token key
+  static const String _rosterDataKey = 'saved_roster';
+  static const String _apiTokenKey = 'api_token';
 
   @override
   void initState() {
@@ -67,6 +69,10 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedRosterData = prefs.getString(_rosterDataKey);
+      final apiToken = prefs.getString(_apiTokenKey);
+
+      // Store current API token for display
+      _currentApiToken = apiToken;
 
       if (savedRosterData != null && savedRosterData.isNotEmpty) {
         // We have saved data, navigate directly to display screen
@@ -94,9 +100,17 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         return;
       }
 
-      // No saved data, try to fetch from API
-      print('No saved data found, attempting to fetch from API');
-      await _fetchRosterDataFromAPI();
+      // No saved data, try to fetch from API if token exists
+      if (apiToken != null && apiToken.isNotEmpty) {
+        print('No saved data found, attempting to fetch from API');
+        await _fetchRosterDataFromAPI();
+      } else {
+        // No token, show manual input screen
+        setState(() {
+          _isInitializing = false;
+        });
+        _animationController.forward();
+      }
     } catch (e) {
       print('Error during initialization: $e');
       setState(() {
@@ -118,8 +132,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         print('No API token available in SharedPreferences');
         setState(() {
           _isInitializing = false;
-          _errorMessage =
-              'Kein API-Token verfügbar. Bitte Daten manuell eingeben.';
+          _errorMessage = 'Kein API-Token verfügbar. Bitte Token eingeben.';
         });
         _animationController.forward();
         return;
@@ -200,9 +213,97 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
+  /// Show token input dialog
+  Future<void> _showTokenDialog({bool isEdit = false}) async {
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return TokenInputDialog(
+          initialToken: isEdit ? _currentApiToken : null,
+          title: isEdit ? 'API-Token bearbeiten' : 'API-Token eingeben',
+          subtitle: isEdit
+              ? 'Geben Sie einen neuen API-Token ein'
+              : 'Geben Sie Ihren API-Token ein, um automatisch Dienstpläne zu laden',
+          onTokenSubmitted: () {
+            // This callback is called when validation starts
+          },
+        );
+      },
+    );
+
+    if (result != null && result.isNotEmpty) {
+      // Token was provided, save it
+      await _saveApiToken(result);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('API-Token erfolgreich gespeichert'),
+            ],
+          ),
+          backgroundColor: Color(0xFF2E7D32),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+
+      // Try to fetch roster data with new token
+      if (!isEdit) {
+        await _fetchRosterDataFromAPI();
+      }
+    }
+  }
+
+  /// Save API token to SharedPreferences
+  Future<void> _saveApiToken(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_apiTokenKey, token);
+      setState(() {
+        _currentApiToken = token;
+      });
+      print('API token saved to SharedPreferences');
+    } catch (e) {
+      print('Error saving API token: $e');
+      throw Exception('Fehler beim Speichern des Tokens');
+    }
+  }
+
+  /// Clear API token
+  Future<void> _clearApiToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_apiTokenKey);
+      setState(() {
+        _currentApiToken = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.info, color: Colors.white),
+              SizedBox(width: 12),
+              Text('API-Token entfernt'),
+            ],
+          ),
+          backgroundColor: Colors.blue[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } catch (e) {
+      print('Error clearing API token: $e');
+    }
+  }
+
   /// Format date as YYYY-MM-DD
   String _formatDate(DateTime date) {
-    // ad 1 month to get next month
     return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
@@ -325,101 +426,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Check if API token exists in SharedPreferences
-  Future<bool> _hasApiToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final apiToken = prefs.getString(_apiTokenKey);
-      return apiToken != null && apiToken.isNotEmpty;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /// Build refresh button widget
-  Widget _buildRefreshButton() {
-    return FutureBuilder<bool>(
-      future: _hasApiToken(),
-      builder: (context, snapshot) {
-        final hasToken = snapshot.data ?? false;
-
-        if (!hasToken) {
-          return SizedBox.shrink(); // Don't show button if no token
-        }
-
-        return Column(
-          children: [
-            Container(
-              height: 56,
-              margin: EdgeInsets.only(bottom: 24),
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _refreshFromAPI,
-                child: _isLoading
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Text('Wird geladen...'),
-                        ],
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.refresh, size: 20),
-                          SizedBox(width: 12),
-                          Text(
-                            'Dienstplan von API laden',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF1976D2),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
-            // Divider
-            Row(
-              children: [
-                Expanded(child: Divider()),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'oder',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                Expanded(child: Divider()),
-              ],
-            ),
-            SizedBox(height: 24),
-          ],
-        );
-      },
-    );
-  }
-
+  /// Parse manual JSON input and navigate
   void _parseAndNavigate() {
     try {
       final jsonText = _jsonController.text.trim();
@@ -460,6 +467,238 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         _errorMessage = 'Ungültiges JSON-Format: ${e.toString()}';
       });
     }
+  }
+
+  /// Build API token section
+  Widget _buildApiTokenSection() {
+    final hasToken = _currentApiToken != null && _currentApiToken!.isNotEmpty;
+    final maskedToken = hasToken
+        ? '${_currentApiToken!.substring(0, 8)}${'*' * (_currentApiToken!.length - 12)}${_currentApiToken!.substring(_currentApiToken!.length - 4)}'
+        : null;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 32),
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasToken
+              ? Color(0xFF2E7D32).withOpacity(0.3)
+              : Color(0xFFFF8F00).withOpacity(0.3),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                hasToken ? Icons.verified_user : Icons.key,
+                color: hasToken ? Color(0xFF2E7D32) : Color(0xFFFF8F00),
+                size: 24,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  hasToken
+                      ? 'API-Token konfiguriert'
+                      : 'API-Token erforderlich',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: hasToken ? Color(0xFF2E7D32) : Color(0xFFFF8F00),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          if (hasToken) ...[
+            // Show current token info
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Color(0xFF2E7D32).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Color(0xFF2E7D32).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Token aktiv:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF2E7D32),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          maskedToken!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontFamily: 'monospace',
+                            color: Color(0xFF2E7D32),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 12),
+
+            // Action buttons for existing token
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _refreshFromAPI,
+                    icon: _isLoading
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white)))
+                        : Icon(Icons.refresh, size: 18),
+                    label: Text(_isLoading ? 'Lädt...' : 'Daten laden'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF1976D2),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _showTokenDialog(isEdit: true),
+                  icon: Icon(Icons.edit, size: 18),
+                  label: Text('Bearbeiten'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFFFF8F00),
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                SizedBox(width: 8),
+                IconButton(
+                  onPressed: () => _showRemoveTokenDialog(),
+                  icon: Icon(Icons.delete_outline, color: Colors.red[600]),
+                  tooltip: 'Token entfernen',
+                ),
+              ],
+            ),
+          ] else ...[
+            // Show token input prompt
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Color(0xFFFF8F00).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Color(0xFFFF8F00).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFFFF8F00), size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Geben Sie Ihren API-Token ein, um automatisch Dienstpläne zu laden',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFFFF8F00),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 12),
+
+            // Add token button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showTokenDialog(),
+                icon: Icon(Icons.add, size: 20),
+                label: Text(
+                  'API-Token eingeben',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF8F00),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Show remove token confirmation dialog
+  void _showRemoveTokenDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange[600]),
+            SizedBox(width: 8),
+            Text('Token entfernen'),
+          ],
+        ),
+        content: Text(
+            'Möchten Sie den API-Token wirklich entfernen? Sie können danach keine automatischen Dienstplan-Updates mehr laden.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _clearApiToken();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Entfernen'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -544,7 +783,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: 40),
+                  SizedBox(height: 20),
                   // Austrian Airlines Logo Area
                   Container(
                     padding: EdgeInsets.all(20),
@@ -604,11 +843,12 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   ),
                   SizedBox(height: 32),
 
-                  // Refresh from API button
-                  _buildRefreshButton(),
+                  // API Token Section
+                  _buildApiTokenSection(),
 
+                  // Manual input section
                   Text(
-                    'Dienstplan-Daten manuell eingeben',
+                    'Manuell eingeben',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -618,7 +858,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Fügen Sie Ihre JSON-Dienstplandaten ein',
+                    'Alternativ können Sie JSON-Daten direkt eingeben',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[600],

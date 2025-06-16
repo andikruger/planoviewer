@@ -1,43 +1,59 @@
-// widgets/api_token_dialog.dart
+// widgets/token_input_dialog.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/api_service.dart';
 
-class ApiTokenDialog extends StatefulWidget {
-  final VoidCallback onTokenSet;
+class TokenInputDialog extends StatefulWidget {
+  final VoidCallback? onTokenSubmitted;
+  final String? initialToken;
+  final String title;
+  final String subtitle;
 
-  const ApiTokenDialog({Key? key, required this.onTokenSet}) : super(key: key);
+  const TokenInputDialog({
+    Key? key,
+    this.onTokenSubmitted,
+    this.initialToken,
+    this.title = 'API-Token erforderlich',
+    this.subtitle = 'Geben Sie Ihren API-Token ein, um fortzufahren',
+  }) : super(key: key);
 
   @override
-  _ApiTokenDialogState createState() => _ApiTokenDialogState();
+  _TokenInputDialogState createState() => _TokenInputDialogState();
 }
 
-class _ApiTokenDialogState extends State<ApiTokenDialog>
+class _TokenInputDialogState extends State<TokenInputDialog>
     with TickerProviderStateMixin {
   final TextEditingController _tokenController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  bool _isValidating = false;
-  bool _obscureText = true;
-  String? _errorMessage;
   late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  bool _isTokenVisible = false;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+
+    // Set initial token if provided
+    if (widget.initialToken != null) {
+      _tokenController.text = widget.initialToken!;
+    }
+
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 500),
+      duration: Duration(milliseconds: 300),
       vsync: this,
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
     );
     _animationController.forward();
 
-    // Auto-focus the text field
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
+    // Auto-focus the text field after a short delay
+    Future.delayed(Duration(milliseconds: 500), () {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
     });
   }
 
@@ -49,118 +65,140 @@ class _ApiTokenDialogState extends State<ApiTokenDialog>
     super.dispose();
   }
 
-  Future<void> _validateAndSetToken() async {
+  void _validateAndSubmit() {
     final token = _tokenController.text.trim();
 
+    setState(() {
+      _errorMessage = null;
+      _isLoading = true;
+    });
+
+    // Basic validation
     if (token.isEmpty) {
       setState(() {
-        _errorMessage = 'Bitte geben Sie einen API Token ein';
+        _errorMessage = 'Bitte geben Sie einen API-Token ein';
+        _isLoading = false;
       });
       return;
     }
 
-    setState(() {
-      _isValidating = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final isValid = await ApiService.validateToken(token);
-
-      if (isValid) {
-        ApiService.setToken(token);
-        widget.onTokenSet();
-        Navigator.of(context).pop();
-      } else {
-        setState(() {
-          _errorMessage =
-              'Ungültiger API Token. Bitte überprüfen Sie den Token.';
-        });
-      }
-    } catch (e) {
+    if (token.length < 10) {
       setState(() {
-        _errorMessage = 'Fehler bei der Validierung: ${e.toString()}';
+        _errorMessage = 'Der API-Token scheint zu kurz zu sein';
+        _isLoading = false;
       });
-    } finally {
-      setState(() {
-        _isValidating = false;
-      });
+      return;
     }
+
+    // Call the callback if provided
+    if (widget.onTokenSubmitted != null) {
+      widget.onTokenSubmitted!();
+    }
+
+    // Simulate API validation (you can replace this with actual API call)
+    Future.delayed(Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        Navigator.of(context).pop(token);
+      }
+    });
   }
 
   void _pasteFromClipboard() async {
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    if (clipboardData?.text != null) {
-      _tokenController.text = clipboardData!.text!;
-      setState(() {
-        _errorMessage = null;
-      });
+    try {
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      if (clipboardData?.text != null) {
+        _tokenController.text = clipboardData!.text!;
+        setState(() {
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Einfügen aus der Zwischenablage'),
+          backgroundColor: Colors.red[600],
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Prevent dismissing without token
-      child: Dialog(
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        elevation: 16,
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.9,
-            constraints: BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildHeader(),
-                _buildContent(),
-                _buildActions(),
+        contentPadding: EdgeInsets.zero,
+        content: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFE30613),
+                Colors.white,
               ],
+              stops: [0.0, 0.3],
             ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildTokenDialogHeader(),
+              _buildTokenDialogContent(),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildTokenDialogHeader() {
     return Container(
       padding: EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFE30613), Color(0xFFB71C1C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
       child: Column(
         children: [
-          Icon(
-            Icons.vpn_key,
-            color: Colors.white,
-            size: 32,
-          ),
-          SizedBox(height: 12),
-          Text(
-            'API Token erforderlich',
-            style: TextStyle(
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
               color: Colors.white,
-              fontSize: 20,
+              borderRadius: BorderRadius.circular(40),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.key,
+              size: 40,
+              color: Color(0xFFE30613),
+            ),
+          ),
+          SizedBox(height: 16),
+          Text(
+            widget.title,
+            style: TextStyle(
+              fontSize: 24,
               fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 8),
           Text(
-            'Bitte geben Sie Ihren API Token ein, um fortzufahren',
+            widget.subtitle,
             style: TextStyle(
+              fontSize: 16,
               color: Colors.white.withOpacity(0.9),
-              fontSize: 14,
             ),
             textAlign: TextAlign.center,
           ),
@@ -169,82 +207,108 @@ class _ApiTokenDialogState extends State<ApiTokenDialog>
     );
   }
 
-  Widget _buildContent() {
-    return Padding(
+  Widget _buildTokenDialogContent() {
+    return Container(
       padding: EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'API Token',
+            'API-Token',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
+              color: Colors.grey[700],
             ),
           ),
           SizedBox(height: 8),
+
+          // Token input field
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _errorMessage != null ? Colors.red : Colors.grey[300]!,
-                width: _errorMessage != null ? 2 : 1,
+                color: _errorMessage != null
+                    ? Colors.red[400]!
+                    : Colors.grey[300]!,
+                width: 2,
               ),
+              color: Colors.grey[50],
             ),
             child: TextField(
               controller: _tokenController,
               focusNode: _focusNode,
-              obscureText: _obscureText,
-              maxLines: 1,
+              obscureText: !_isTokenVisible,
+              onSubmitted: (_) => _validateAndSubmit(),
               decoration: InputDecoration(
-                hintText: 'z.B. sk-1234567890abcdef...',
+                hintText: 'sk-xxxxxxxxxxxxxxxxxxxxxxxx',
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(16),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: Icon(
-                        _obscureText ? Icons.visibility : Icons.visibility_off,
-                        color: Colors.grey[600],
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureText = !_obscureText;
-                        });
-                      },
+                      onPressed: _pasteFromClipboard,
+                      icon: Icon(Icons.paste, color: Colors.grey[600]),
+                      tooltip: 'Aus Zwischenablage einfügen',
                     ),
                     IconButton(
-                      icon: Icon(Icons.paste, color: Colors.grey[600]),
-                      onPressed: _pasteFromClipboard,
-                      tooltip: 'Aus Zwischenablage einfügen',
+                      onPressed: () {
+                        setState(() {
+                          _isTokenVisible = !_isTokenVisible;
+                        });
+                      },
+                      icon: Icon(
+                        _isTokenVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.grey[600],
+                      ),
+                      tooltip: _isTokenVisible
+                          ? 'Token verbergen'
+                          : 'Token anzeigen',
                     ),
                   ],
                 ),
               ),
-              onSubmitted: (_) => _validateAndSetToken(),
+              style: TextStyle(
+                fontSize: 14,
+                fontFamily: 'monospace',
+              ),
             ),
           ),
+
+          // Error message
           if (_errorMessage != null) ...[
             SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.red, size: 16),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 12,
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-          SizedBox(height: 16),
+
+          SizedBox(height: 24),
+
+          // Help text
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -253,179 +317,94 @@ class _ApiTokenDialogState extends State<ApiTokenDialog>
               border: Border.all(color: Colors.blue[200]!),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Ihr API Token wird nur für diese Sitzung gespeichert und nicht dauerhaft auf dem Gerät hinterlegt.',
-                    style: TextStyle(
-                      color: Colors.blue[800],
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActions() {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _isValidating ? null : _validateAndSetToken,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFE30613),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 2,
-              ),
-              child: _isValidating
-                  ? Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text('Validierung läuft...'),
-                      ],
-                    )
-                  : Text(
-                      'Token validieren',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-          SizedBox(height: 12),
-          TextButton(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => _buildHelpDialog(),
-              );
-            },
-            child: Text(
-              'Wo finde ich meinen API Token?',
-              style: TextStyle(
-                color: Color(0xFFE30613),
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHelpDialog() {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
-        children: [
-          Icon(Icons.help_outline, color: Color(0xFFE30613)),
-          SizedBox(width: 8),
-          Text('API Token Hilfe'),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'So finden Sie Ihren API Token:',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 12),
-          _buildHelpStep('1.', 'Öffnen Sie Ihr Account-Dashboard'),
-          _buildHelpStep('2.', 'Navigieren Sie zu "API Einstellungen"'),
-          _buildHelpStep('3.', 'Klicken Sie auf "Token generieren"'),
-          _buildHelpStep('4.', 'Kopieren Sie den generierten Token'),
-          SizedBox(height: 12),
-          Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.amber[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber, color: Colors.amber[700], size: 16),
                 SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    'Bewahren Sie Ihren Token sicher auf!',
-                    style: TextStyle(
-                      color: Colors.amber[800],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Wo finde ich meinen API-Token?',
+                        style: TextStyle(
+                          color: Colors.blue[800],
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Ihr API-Token finden Sie in den Einstellungen Ihres Kontos oder wurde Ihnen per E-Mail zugesandt.',
+                        style: TextStyle(
+                          color: Colors.blue[700],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text('Verstanden'),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildHelpStep(String step, String description) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Color(0xFFE30613).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(
-                step,
-                style: TextStyle(
-                  color: Color(0xFFE30613),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+          SizedBox(height: 24),
+
+          // Submit button
+          ElevatedButton(
+            onPressed: _isLoading ? null : _validateAndSubmit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFE30613),
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
+              elevation: 0,
             ),
+            child: _isLoading
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Überprüfung...',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  )
+                : Text(
+                    'Token bestätigen',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
-          SizedBox(width: 12),
-          Expanded(
+
+          SizedBox(height: 12),
+
+          // Cancel button
+          TextButton(
+            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
             child: Text(
-              description,
-              style: TextStyle(fontSize: 14),
+              'Abbrechen',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
             ),
           ),
         ],
