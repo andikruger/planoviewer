@@ -106,7 +106,8 @@ class ApiService {
 
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/shifts'), // Replace with actual endpoint
+            Uri.parse(
+                '$_baseUrl/workflow/schedule'), // Replace with actual endpoint
             headers: {
               'Authorization': 'Bearer $_apiToken',
               'Content-Type': 'application/json',
