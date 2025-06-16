@@ -165,6 +165,10 @@ class TransportInfo {
   });
 
   factory TransportInfo.fromJson(Map<String, dynamic> json) {
+    print('=== PARSING TRANSPORT INFO ===');
+    print('Raw departureTime: ${json['departureTime']}');
+    print('Raw arrivalTime: ${json['arrivalTime']}');
+
     final legs = (json['legs'] as List?)
             ?.map((leg) => TransportLeg.fromJson(leg))
             .toList() ??
@@ -183,7 +187,7 @@ class TransportInfo {
       }
     }
 
-    return TransportInfo(
+    final transportInfo = TransportInfo(
       departureTime: DateTime.parse(json['departureTime']),
       arrivalTime: DateTime.parse(json['arrivalTime']),
       durationMinutes: (json['duration']['inSeconds'] as int) ~/ 60,
@@ -192,18 +196,33 @@ class TransportInfo {
       co2Grams: json['co2Emission']?['inGrams'] ?? 0,
       disruption: disruption,
     );
+
+    print('Parsed departureTime: ${transportInfo.departureTime}');
+    print('Parsed arrivalTime: ${transportInfo.arrivalTime}');
+    print('Formatted departure: ${transportInfo.formattedDepartureTime}');
+    print('Formatted arrival: ${transportInfo.formattedArrivalTime}');
+
+    return transportInfo;
   }
 
   String get formattedDepartureTime {
     // Convert UTC back to Vienna time for display
     final viennaTime = departureTime.add(Duration(hours: _getViennaOffset()));
-    return '${viennaTime.hour.toString().padLeft(2, '0')}:${viennaTime.minute.toString().padLeft(2, '0')}';
+    final formatted =
+        '${viennaTime.hour.toString().padLeft(2, '0')}:${viennaTime.minute.toString().padLeft(2, '0')}';
+    print(
+        'Departure: UTC ${departureTime} → Vienna ${viennaTime} → Formatted: $formatted');
+    return formatted;
   }
 
   String get formattedArrivalTime {
     // Convert UTC back to Vienna time for display
     final viennaTime = arrivalTime.add(Duration(hours: _getViennaOffset()));
-    return '${viennaTime.hour.toString().padLeft(2, '0')}:${viennaTime.minute.toString().padLeft(2, '0')}';
+    final formatted =
+        '${viennaTime.hour.toString().padLeft(2, '0')}:${viennaTime.minute.toString().padLeft(2, '0')}';
+    print(
+        'Arrival: UTC ${arrivalTime} → Vienna ${viennaTime} → Formatted: $formatted');
+    return formatted;
   }
 
   String get formattedDuration {
@@ -216,10 +235,43 @@ class TransportInfo {
   }
 
   int _getViennaOffset() {
-    // Simple check - in a real app you'd want more robust timezone handling
+    // Get current time to determine if we're in DST
     final now = DateTime.now();
     final month = now.month;
-    return (month >= 4 && month <= 9) ? 2 : 1; // Rough DST check
+    final day = now.day;
+
+    // Simple DST check for Vienna (this matches the logic in _convertViennaToUtc)
+    bool isDst = false;
+    if (month > 3 && month < 10) {
+      isDst = true; // Definitely summer time
+    } else if (month == 3) {
+      // Check if it's after the last Sunday of March
+      final lastSundayMarch = _getLastSundayOfMonth(now.year, 3);
+      isDst = day >= lastSundayMarch;
+    } else if (month == 10) {
+      // Check if it's before the last Sunday of October
+      final lastSundayOctober = _getLastSundayOfMonth(now.year, 10);
+      isDst = day < lastSundayOctober;
+    }
+
+    final offset = isDst ? 2 : 1;
+    print(
+        'Vienna offset calculation: month=$month, day=$day, isDst=$isDst, offset=$offset');
+    return offset;
+  }
+
+  static int _getLastSundayOfMonth(int year, int month) {
+    // Find the last day of the month
+    final lastDay = DateTime(year, month + 1, 0).day;
+
+    // Find the last Sunday
+    for (int day = lastDay; day >= 1; day--) {
+      final date = DateTime(year, month, day);
+      if (date.weekday == DateTime.sunday) {
+        return day;
+      }
+    }
+    return lastDay;
   }
 }
 

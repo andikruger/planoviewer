@@ -61,6 +61,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   }
 
   /// Initialize roster data - check SharedPreferences first, then API
+
+  /// Initialize roster data - check SharedPreferences first, then API
   Future<void> _initializeRosterData() async {
     setState(() {
       _isInitializing = true;
@@ -70,6 +72,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final prefs = await SharedPreferences.getInstance();
       final savedRosterData = prefs.getString(_rosterDataKey);
       final apiToken = prefs.getString(_apiTokenKey);
+      final savedStartDate = prefs.getString('roster_start_date');
+      final savedEndDate = prefs.getString('roster_end_date');
 
       // Store current API token for display
       _currentApiToken = apiToken;
@@ -81,6 +85,18 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         final jsonData = json.decode(savedRosterData);
         final rosterData = WorkRosterData.fromJson(jsonData);
 
+        // Parse saved dates or calculate them
+        DateTime startDate, endDate;
+        if (savedStartDate != null && savedEndDate != null) {
+          startDate = DateTime.parse(savedStartDate);
+          endDate = DateTime.parse(savedEndDate);
+        } else {
+          // Fallback to current date calculation
+          final (startDateStr, endDateStr) = _getDateRange(DateTime.now());
+          startDate = DateTime.parse(startDateStr);
+          endDate = DateTime.parse(endDateStr);
+        }
+
         // Wait a moment for the animation, then navigate
         await Future.delayed(Duration(milliseconds: 500));
 
@@ -89,7 +105,11 @@ class _RosterInputScreenState extends State<RosterInputScreen>
             context,
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
-                  RosterDisplayScreen(rosterData: rosterData),
+                  RosterDisplayScreen(
+                rosterData: rosterData,
+                startDate: startDate,
+                endDate: endDate,
+              ),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
                 return FadeTransition(opacity: animation, child: child);
@@ -142,13 +162,11 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         _isLoading = true;
       });
 
-      // Get current month date range
+      // Get date range based on current date
       final now = DateTime.now();
-      final startDate = DateTime(now.year, now.month, 1);
-      final endDate = DateTime(now.year, now.month + 1, 1);
-
-      final startDateStr = _formatDate(startDate);
-      final endDateStr = _formatDate(endDate);
+      final (startDateStr, endDateStr) = _getDateRange(now);
+      final startDate = DateTime.parse(startDateStr);
+      final endDate = DateTime.parse(endDateStr);
 
       print('Fetching roster data for period: $startDateStr to $endDateStr');
       print('Using API token: ${apiToken.substring(0, 8)}...');
@@ -170,18 +188,23 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         // Validate that we can parse this data
         final rosterData = WorkRosterData.fromJson(jsonData);
 
-        // Save to SharedPreferences
+        // Save roster data and date range
         await _saveRosterData(response.body);
+        await _saveDateRange(startDate, endDate);
 
         print('Successfully fetched and saved roster data');
 
-        // Navigate to display screen
+        // Navigate to display screen with date range
         if (mounted) {
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
-                  RosterDisplayScreen(rosterData: rosterData),
+                  RosterDisplayScreen(
+                rosterData: rosterData,
+                startDate: startDate,
+                endDate: endDate,
+              ),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
                 return SlideTransition(
@@ -211,6 +234,116 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       });
       _animationController.forward();
     }
+  }
+
+  /// Get date range based on roster release schedule
+  (String, String) _getDateRange(DateTime now) {
+    final String startDateStr;
+    final String endDateStr;
+
+    if (now.day < 15) {
+      // Before 15th: Show only current month
+      startDateStr = _formatDate(DateTime(now.year, now.month, 1));
+      endDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
+      print(
+          'Before 15th - fetching current month only: ${_getMonthName(now.month)}');
+    } else {
+      // 15th and after: Show current month + next month
+      startDateStr = _formatDate(DateTime(now.year, now.month, 1));
+      endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
+      final nextMonth = now.month == 12 ? 1 : now.month + 1;
+      print(
+          'After 15th - fetching current and next month: ${_getMonthName(now.month)} + ${_getMonthName(nextMonth)}');
+    }
+
+    return (startDateStr, endDateStr);
+  }
+
+  /// Save date range to SharedPreferences
+  Future<void> _saveDateRange(DateTime startDate, DateTime endDate) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('roster_start_date', startDate.toIso8601String());
+      await prefs.setString('roster_end_date', endDate.toIso8601String());
+      print(
+          'Date range saved: ${startDate.toIso8601String()} to ${endDate.toIso8601String()}');
+    } catch (e) {
+      print('Error saving date range: $e');
+    }
+  }
+
+  /// Parse manual JSON input and navigate
+  void _parseAndNavigate() {
+    try {
+      final jsonText = _jsonController.text.trim();
+      if (jsonText.isEmpty) {
+        setState(() {
+          _errorMessage = 'Bitte fügen Sie JSON-Daten ein';
+        });
+        return;
+      }
+
+      final jsonData = json.decode(jsonText);
+      final rosterData = WorkRosterData.fromJson(jsonData);
+
+      // For manual input, calculate current date range
+      final now = DateTime.now();
+      final (startDateStr, endDateStr) = _getDateRange(now);
+      final startDate = DateTime.parse(startDateStr);
+      final endDate = DateTime.parse(endDateStr);
+
+      // Save the roster data and date range
+      _saveRosterData(jsonText);
+      _saveDateRange(startDate, endDate);
+
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              RosterDisplayScreen(
+            rosterData: rosterData,
+            startDate: startDate,
+            endDate: endDate,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOutCubic,
+              )),
+              child: child,
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Ungültiges JSON-Format: ${e.toString()}';
+      });
+    }
+  }
+
+  /// Get month name for logging
+  String _getMonthName(int month) {
+    const monthNames = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
+    return monthNames[month];
   }
 
   /// Show token input dialog
@@ -427,47 +560,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   }
 
   /// Parse manual JSON input and navigate
-  void _parseAndNavigate() {
-    try {
-      final jsonText = _jsonController.text.trim();
-      if (jsonText.isEmpty) {
-        setState(() {
-          _errorMessage = 'Bitte fügen Sie JSON-Daten ein';
-        });
-        return;
-      }
-
-      final jsonData = json.decode(jsonText);
-      final rosterData = WorkRosterData.fromJson(jsonData);
-
-      // Save the roster data
-      _saveRosterData(jsonText);
-
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              RosterDisplayScreen(rosterData: rosterData),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1.0, 0.0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeInOutCubic,
-              )),
-              child: child,
-            );
-          },
-        ),
-      );
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Ungültiges JSON-Format: ${e.toString()}';
-      });
-    }
-  }
 
   /// Build API token section
   Widget _buildApiTokenSection() {

@@ -4,17 +4,81 @@ import 'package:flutter/material.dart';
 import '../models/roster_models.dart';
 import '../services/transport_service.dart';
 
+// Time converter utility class
+class TimeConverter {
+  /// Converts time from various formats to 24-hour format
+  static String to24Hour(String timeString) {
+    if (timeString.isEmpty) return timeString;
+
+    try {
+      final cleanTime = timeString.trim();
+
+      // Check if already in 24-hour format (no AM/PM)
+      if (!cleanTime.toLowerCase().contains('am') &&
+          !cleanTime.toLowerCase().contains('pm') &&
+          !cleanTime.toLowerCase().contains('a.m') &&
+          !cleanTime.toLowerCase().contains('p.m')) {
+        // Validate it's a proper time format
+        final timeRegex = RegExp(r'^(\d{1,2}):(\d{2})$');
+        final match = timeRegex.firstMatch(cleanTime);
+        if (match != null) {
+          final hour = int.parse(match.group(1)!);
+          final minute = int.parse(match.group(2)!);
+          if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+            return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+          }
+        }
+        return timeString; // Return as is if not valid 24-hour format
+      }
+
+      // Handle 12-hour format with AM/PM
+      final amPmRegex = RegExp(
+          r'(\d{1,2}):(\d{2})\s*(AM|PM|am|pm|a\.m\.|p\.m\.)',
+          caseSensitive: false);
+      final match = amPmRegex.firstMatch(cleanTime);
+
+      if (match != null) {
+        int hour = int.parse(match.group(1)!);
+        final minute = int.parse(match.group(2)!);
+        final period = match.group(3)!.toLowerCase();
+
+        // Convert to 24-hour format
+        if (period.startsWith('p') && hour != 12) {
+          hour += 12;
+        } else if (period.startsWith('a') && hour == 12) {
+          hour = 0;
+        }
+
+        return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+      }
+
+      // If no pattern matches, return original
+      print('Warning: Could not convert time format: "$timeString"');
+      return timeString;
+    } catch (e) {
+      print('Error converting time "$timeString": $e');
+      return timeString;
+    }
+  }
+}
+
 class DayCard extends StatelessWidget {
   final WorkDay day;
   final int dayNumber;
+  final DateTime? actualDate;
 
-  const DayCard({Key? key, required this.day, required this.dayNumber})
-      : super(key: key);
+  const DayCard({
+    Key? key,
+    required this.day,
+    required this.dayNumber,
+    this.actualDate,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final isWeekend = _isWeekend(dayNumber);
     final dayName = _getDayName(dayNumber);
+    final dateText = _getDateText();
 
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -110,7 +174,7 @@ class DayCard extends StatelessWidget {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            '${dayNumber}. Juli 2025',
+                            dateText,
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -199,7 +263,7 @@ class DayCard extends StatelessWidget {
                                           ),
                                         ),
                                         Text(
-                                          shift.interval,
+                                          _formatShiftInterval(shift.interval),
                                           style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
@@ -248,6 +312,56 @@ class DayCard extends StatelessWidget {
     );
   }
 
+  String _getDateText() {
+    if (actualDate != null) {
+      final monthNames = [
+        '',
+        'Januar',
+        'Februar',
+        'März',
+        'April',
+        'Mai',
+        'Juni',
+        'Juli',
+        'August',
+        'September',
+        'Oktober',
+        'November',
+        'Dezember'
+      ];
+      return '${actualDate!.day}. ${monthNames[actualDate!.month]} ${actualDate!.year}';
+    }
+
+    final now = DateTime.now();
+    final monthNames = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
+
+    int estimatedMonth = now.month;
+    int estimatedYear = now.year;
+
+    if (now.day >= 15) {
+      if (dayNumber < 15 && now.day > 20) {
+        estimatedMonth = now.month == 12 ? 1 : now.month + 1;
+        if (now.month == 12) estimatedYear = now.year + 1;
+      }
+    }
+
+    return '$dayNumber. ${monthNames[estimatedMonth]} $estimatedYear';
+  }
+
   Widget _buildTransportButton(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -259,7 +373,7 @@ class DayCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
-            print('Transport button tapped!'); // Debug print
+            print('Transport button tapped!');
             _showTransportInfo(context);
           },
           child: Padding(
@@ -276,9 +390,8 @@ class DayCard extends StatelessWidget {
   }
 
   void _showTransportInfo(BuildContext context) async {
-    print('Transport button pressed!'); // Debug print
+    print('Transport button pressed!');
 
-    // Extract the start time from the first shift
     if (day.shifts.isEmpty) {
       print('No shifts found');
       _showErrorDialog(context, 'Keine Schichten gefunden');
@@ -286,9 +399,8 @@ class DayCard extends StatelessWidget {
     }
 
     final firstShift = day.shifts.first;
-    print('First shift interval: ${firstShift.interval}'); // Debug print
+    print('First shift interval: ${firstShift.interval}');
 
-    // Handle format like "06:00-14:30"
     String startTimeStr;
     if (firstShift.interval.contains('-')) {
       startTimeStr = firstShift.interval.split('-').first.trim();
@@ -298,32 +410,55 @@ class DayCard extends StatelessWidget {
       startTimeStr = firstShift.interval.trim();
     }
 
-    print('Start time string: $startTimeStr'); // Debug print
+    print('Raw start time string: $startTimeStr');
 
-    // Parse the time (format like "06:00")
-    final timeParts = startTimeStr.split(':');
+    // Convert to 24-hour format if it's in AM/PM format
+    final startTime24Hour = TimeConverter.to24Hour(startTimeStr);
+    print('Converted to 24-hour: $startTime24Hour');
+
+    final timeParts = startTime24Hour.split(':');
     if (timeParts.length != 2) {
-      print('Invalid time format: $startTimeStr');
-      _showErrorDialog(context, 'Ungültiges Zeitformat: $startTimeStr');
+      print('Invalid time format after conversion: $startTime24Hour');
+      _showErrorDialog(context, 'Ungültiges Zeitformat: $startTime24Hour');
       return;
     }
 
     final hour = int.tryParse(timeParts[0]);
     final minute = int.tryParse(timeParts[1]);
-    if (hour == null || minute == null) {
-      print('Could not parse hour/minute: $hour, $minute');
-      _showErrorDialog(context, 'Zeit konnte nicht geparst werden');
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59) {
+      print('Could not parse hour/minute or invalid time: $hour:$minute');
+      _showErrorDialog(
+          context, 'Zeit konnte nicht geparst werden: $startTime24Hour');
       return;
     }
 
-    // Create work start time for July 2025 and subtract 10 minutes to arrive early
-    final shiftStartTime = DateTime(2025, 7, dayNumber, hour, minute);
-    final workStartTime = shiftStartTime.subtract(Duration(minutes: 10));
-    print('Shift starts at: $shiftStartTime'); // Debug print
-    print(
-        'Want to arrive at: $workStartTime (10 minutes early)'); // Debug print
+    DateTime shiftDate;
+    if (actualDate != null) {
+      shiftDate = actualDate!;
+    } else {
+      final now = DateTime.now();
+      if (now.day >= 15) {
+        if (dayNumber < 15 && now.day > 20) {
+          shiftDate = DateTime(now.year, now.month + 1, dayNumber);
+        } else {
+          shiftDate = DateTime(now.year, now.month, dayNumber);
+        }
+      } else {
+        shiftDate = DateTime(now.year, now.month, dayNumber);
+      }
+    }
 
-    // Show loading dialog
+    final shiftStartTime =
+        DateTime(shiftDate.year, shiftDate.month, shiftDate.day, hour, minute);
+    final workStartTime = shiftStartTime.subtract(Duration(minutes: 10));
+    print('Shift starts at: $shiftStartTime');
+    print('Want to arrive at: $workStartTime (10 minutes early)');
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -342,15 +477,8 @@ class DayCard extends StatelessWidget {
       ),
     );
 
-    print('Loading dialog shown'); // Debug
-
     try {
-      // Get all routes instead of just the first one
       final allRoutes = await TransportService.getAllRoutes(workStartTime);
-
-      print('All routes received: ${allRoutes?.length ?? 0}'); // Debug
-
-      // Close loading dialog
       Navigator.of(context).pop();
 
       if (allRoutes != null && allRoutes.isNotEmpty) {
@@ -361,8 +489,6 @@ class DayCard extends StatelessWidget {
     } catch (e, stackTrace) {
       print('Exception in _showTransportInfo: $e');
       print('Stack trace: $stackTrace');
-
-      // Close loading dialog
       Navigator.of(context).pop();
       _showErrorDialog(context, 'Fehler beim Laden der Verbindung: $e');
     }
@@ -410,17 +536,17 @@ class DayCard extends StatelessWidget {
 
   bool _isWeekend(int dayNumber) {
     final dayOfWeek = (dayNumber - 1) % 7;
-    return dayOfWeek == 5 || dayOfWeek == 6; // Saturday or Sunday
+    return dayOfWeek == 5 || dayOfWeek == 6;
   }
 
   Color _getShiftColor(String shiftName) {
     switch (shiftName) {
       case 'Arbeitszeit':
-        return Color(0xFFE30613); // Austrian Airlines Red
+        return Color(0xFFE30613);
       case 'RT':
-        return Color(0xFFFF8F00); // Orange for rest time
+        return Color(0xFFFF8F00);
       case 'TX':
-        return Color(0xFF1976D2); // Blue for training
+        return Color(0xFF1976D2);
       default:
         return Colors.grey;
     }
@@ -446,14 +572,39 @@ class DayCard extends StatelessWidget {
       case 'RT':
         return 'Ruhezeit';
       case 'TX':
-        return 'Training';
+        return 'Tag Frei geblockt';
       default:
         return shiftName;
     }
   }
+
+  /// Format shift interval to display in 24-hour format
+  String _formatShiftInterval(String interval) {
+    if (interval.isEmpty) return interval;
+
+    try {
+      // Handle intervals like "6:30 AM - 2:30 PM" or "06:00-14:30"
+      String separator = '-';
+      if (interval.contains(' - ')) {
+        separator = ' - ';
+      }
+
+      final parts = interval.split(separator);
+      if (parts.length == 2) {
+        final startTime = TimeConverter.to24Hour(parts[0].trim());
+        final endTime = TimeConverter.to24Hour(parts[1].trim());
+        return '$startTime$separator$endTime';
+      }
+
+      // If it's just a single time, convert it
+      return TimeConverter.to24Hour(interval);
+    } catch (e) {
+      print('Error formatting shift interval "$interval": $e');
+      return interval; // Return original if conversion fails
+    }
+  }
 }
 
-// Separate StatefulWidget for the transport dialog with pagination
 class _TransportDialog extends StatefulWidget {
   final List<TransportInfo> routes;
   final DateTime workStart;
@@ -493,7 +644,6 @@ class _TransportDialogState extends State<_TransportDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header with route indicator
             Padding(
               padding: EdgeInsets.all(20),
               child: Column(
@@ -511,7 +661,6 @@ class _TransportDialogState extends State<_TransportDialog> {
                           ),
                         ),
                       ),
-                      // Route indicator
                       if (widget.routes.length > 1)
                         Container(
                           padding:
@@ -531,7 +680,6 @@ class _TransportDialogState extends State<_TransportDialog> {
                         ),
                     ],
                   ),
-                  // Route quality indicators
                   if (widget.routes.length > 1) ...[
                     SizedBox(height: 8),
                     Row(
@@ -600,8 +748,6 @@ class _TransportDialogState extends State<_TransportDialog> {
                 ],
               ),
             ),
-
-            // PageView for routes
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -616,13 +762,10 @@ class _TransportDialogState extends State<_TransportDialog> {
                 },
               ),
             ),
-
-            // Navigation and close buttons
             Padding(
               padding: EdgeInsets.all(20),
               child: Column(
                 children: [
-                  // Navigation buttons (only show if multiple routes)
                   if (widget.routes.length > 1) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -665,8 +808,6 @@ class _TransportDialogState extends State<_TransportDialog> {
                     ),
                     SizedBox(height: 12),
                   ],
-
-                  // Close button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -696,7 +837,6 @@ class _TransportDialogState extends State<_TransportDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Departure and arrival time highlight
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -762,10 +902,7 @@ class _TransportDialogState extends State<_TransportDialog> {
               ],
             ),
           ),
-
           SizedBox(height: 12),
-
-          // Trip details
           Row(
             children: [
               _buildInfoChip(Icons.timer, info.formattedDuration),
@@ -775,10 +912,7 @@ class _TransportDialogState extends State<_TransportDialog> {
               _buildInfoChip(Icons.eco, '${info.co2Grams}g CO₂'),
             ],
           ),
-
           SizedBox(height: 12),
-
-          // Route details
           Text(
             'Route:',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -811,8 +945,6 @@ class _TransportDialogState extends State<_TransportDialog> {
                   ],
                 ),
               )),
-
-          // Disruption warning
           if (info.disruption != null) ...[
             SizedBox(height: 12),
             Container(
@@ -839,7 +971,6 @@ class _TransportDialogState extends State<_TransportDialog> {
               ),
             ),
           ],
-
           SizedBox(height: 16),
         ],
       ),

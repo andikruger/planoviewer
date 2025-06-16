@@ -1,7 +1,5 @@
 // screens/calendar_screen.dart
 
-// ignore_for_file: unused_local_variable
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planoviewer/screens/wish_screen.dart';
@@ -9,8 +7,15 @@ import '../models/roster_models.dart';
 
 class CalendarScreen extends StatefulWidget {
   final WorkRosterData rosterData;
+  final DateTime startDate;
+  final DateTime endDate;
 
-  const CalendarScreen({Key? key, required this.rosterData}) : super(key: key);
+  const CalendarScreen({
+    Key? key,
+    required this.rosterData,
+    required this.startDate,
+    required this.endDate,
+  }) : super(key: key);
 
   @override
   _CalendarScreenState createState() => _CalendarScreenState();
@@ -21,6 +26,7 @@ class _CalendarScreenState extends State<CalendarScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   int? selectedDay;
+  DateTime? selectedDate;
 
   @override
   void initState() {
@@ -33,6 +39,12 @@ class _CalendarScreenState extends State<CalendarScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
+
+    print('=== CALENDAR DEBUG INFO ===');
+    print('Start date: ${widget.startDate}');
+    print('End date: ${widget.endDate}');
+    print(
+        'Date range: ${widget.endDate.difference(widget.startDate).inDays} days');
   }
 
   @override
@@ -43,9 +55,13 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   @override
   Widget build(BuildContext context) {
-    final days = widget.rosterData.getDays();
-    final workingDays = days.where((d) => d.hasWork).length;
-    final totalHours = widget.rosterData.getTotalHours();
+    final allDays = widget.rosterData.getDays();
+    final visibleDays = _getVisibleDays(allDays);
+    final workingDays = visibleDays.where((d) => d.hasWork).length;
+    final totalHours = _calculateTotalHours(visibleDays);
+    final headerText = _getHeaderText();
+
+    print('All days: ${allDays.length}, Visible days: ${visibleDays.length}');
 
     return Scaffold(
       body: Container(
@@ -85,7 +101,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                                     color: Colors.white, size: 24),
                                 SizedBox(width: 8),
                                 Text(
-                                  'KALENDER JULI',
+                                  headerText,
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
@@ -143,7 +159,9 @@ class _CalendarScreenState extends State<CalendarScreen>
                     children: [
                       _buildQuickStat(
                           'Arbeitstage', '$workingDays', Color(0xFFE30613)),
-                      _buildQuickStat('Freie Tage', '${31 - workingDays}',
+                      _buildQuickStat(
+                          'Freie Tage',
+                          '${visibleDays.length - workingDays}',
                           Color(0xFF2E7D32)),
                       _buildQuickStat(
                           'Stunden', '${totalHours}h', Color(0xFFFF8F00)),
@@ -203,18 +221,16 @@ class _CalendarScreenState extends State<CalendarScreen>
 
                         SizedBox(height: 16),
 
-                        // Calendar Grid
+                        // Calendar Grid - FIXED VERSION
                         Expanded(
                           child: Padding(
                             padding: EdgeInsets.symmetric(horizontal: 20),
-                            child: _buildCalendarGrid(days),
+                            child: _buildDynamicCalendarGrid(visibleDays),
                           ),
                         ),
 
                         // Selected Day Details
-                        if (selectedDay != null && selectedDay! <= days.length)
-                          _buildSelectedDayDetails(
-                              days[selectedDay! - 1], selectedDay!),
+                        if (selectedDate != null) _buildSelectedDayDetails(),
                       ],
                     ),
                   ),
@@ -227,64 +243,176 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
-  Widget _buildQuickStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
+  /// Filter days based on roster release schedule
+  List<WorkDay> _getVisibleDays(List<WorkDay> allDays) {
+    final now = DateTime.now();
+
+    if (now.day < 15) {
+      // Before 15th: Show only current month
+      final currentMonthDays = <WorkDay>[];
+
+      for (int i = 0; i < allDays.length; i++) {
+        final dayDate = widget.startDate.add(Duration(days: i));
+        if (dayDate.month == now.month && dayDate.year == now.year) {
+          currentMonthDays.add(allDays[i]);
+        }
+      }
+
+      print('Filtering to current month only: ${currentMonthDays.length} days');
+      return currentMonthDays;
+    } else {
+      // 15th and after: Show all days (current + next month)
+      print('Showing all days: ${allDays.length} days');
+      return allDays;
+    }
   }
 
-  Widget _buildCalendarGrid(List<WorkDay> days) {
-    return GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        childAspectRatio: 0.85,
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
-      ),
-      itemCount: 35, // 5 weeks
-      itemBuilder: (context, index) {
-        // July 2024 starts on Monday (index 0)
-        final dayNumber = index + 1;
+  /// Build dynamic calendar grid that works with actual date range
+  Widget _buildDynamicCalendarGrid(List<WorkDay> days) {
+    final startDate = widget.startDate;
+    final endDate =
+        widget.endDate.subtract(Duration(days: 1)); // Make inclusive
 
-        if (dayNumber > 31) {
-          return Container(); // Empty cell for days beyond July 31
+    // Calculate the calendar start (Monday of the week containing start date)
+    final firstWeekday = startDate.weekday; // 1 = Monday, 7 = Sunday
+    final calendarStart = startDate.subtract(Duration(days: firstWeekday - 1));
+
+    // Calculate how many weeks we need to show all days
+    final totalDays = endDate.difference(startDate).inDays + 1;
+    final weeksNeeded = ((firstWeekday - 1 + totalDays) / 7).ceil();
+
+    print('Calendar grid: ${weeksNeeded} weeks');
+    print('Start: $startDate, End: $endDate');
+    print('Calendar start: $calendarStart');
+
+    // Build the calendar with month dividers
+    return _buildCalendarWithDividers(
+        calendarStart, startDate, endDate, days, weeksNeeded);
+  }
+
+  Widget _buildCalendarWithDividers(DateTime calendarStart, DateTime startDate,
+      DateTime endDate, List<WorkDay> days, int weeksNeeded) {
+    List<Widget> calendarRows = [];
+    final monthNames = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
+
+    int? lastMonth;
+
+    for (int week = 0; week < weeksNeeded; week++) {
+      List<Widget> weekCells = [];
+
+      // Check if this week starts a new month
+      bool shouldShowDivider = false;
+      DateTime weekStartDate = calendarStart.add(Duration(days: week * 7));
+
+      // Look for the first day of this week that's in our date range
+      for (int day = 0; day < 7; day++) {
+        final cellDate = calendarStart.add(Duration(days: week * 7 + day));
+        final isInRange =
+            cellDate.isAfter(startDate.subtract(Duration(days: 1))) &&
+                cellDate.isBefore(endDate.add(Duration(days: 1)));
+
+        if (isInRange) {
+          if (lastMonth != null && cellDate.month != lastMonth) {
+            shouldShowDivider = true;
+          }
+          if (lastMonth == null) {
+            lastMonth = cellDate.month;
+          }
+          break;
+        }
+      }
+
+      // Add month divider if needed
+      if (shouldShowDivider) {
+        // Find the new month name
+        for (int day = 0; day < 7; day++) {
+          final cellDate = calendarStart.add(Duration(days: week * 7 + day));
+          final isInRange =
+              cellDate.isAfter(startDate.subtract(Duration(days: 1))) &&
+                  cellDate.isBefore(endDate.add(Duration(days: 1)));
+
+          if (isInRange && cellDate.month != lastMonth) {
+            calendarRows.add(_buildMonthDivider(monthNames[cellDate.month]));
+            lastMonth = cellDate.month;
+            break;
+          }
+        }
+      }
+
+      // Build the week row
+      for (int day = 0; day < 7; day++) {
+        final cellDate = calendarStart.add(Duration(days: week * 7 + day));
+        final isInRange =
+            cellDate.isAfter(startDate.subtract(Duration(days: 1))) &&
+                cellDate.isBefore(endDate.add(Duration(days: 1)));
+
+        if (!isInRange) {
+          // Empty cell for dates outside our range
+          weekCells.add(Container(
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                '${cellDate.day}',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[300],
+                ),
+              ),
+            ),
+          ));
+          continue;
         }
 
-        final day = days[dayNumber - 1];
-        final isWeekend = index % 7 >= 5; // Saturday (5) and Sunday (6)
-        final isSelected = selectedDay == dayNumber;
+        // Find the corresponding day data
+        final dayIndex = cellDate.difference(startDate).inDays;
+        final dayData = dayIndex < days.length ? days[dayIndex] : null;
 
-        return GestureDetector(
+        if (dayData == null) {
+          weekCells.add(Container(height: 60)); // No data for this day
+          continue;
+        }
+
+        final isWeekend = cellDate.weekday >= 6; // 6 = Saturday, 7 = Sunday
+        final isSelected = selectedDate != null &&
+            selectedDate!.year == cellDate.year &&
+            selectedDate!.month == cellDate.month &&
+            selectedDate!.day == cellDate.day;
+
+        weekCells.add(GestureDetector(
           onTap: () {
             setState(() {
-              selectedDay = selectedDay == dayNumber ? null : dayNumber;
+              if (isSelected) {
+                selectedDate = null;
+              } else {
+                selectedDate = cellDate;
+              }
             });
           },
           child: AnimatedContainer(
             duration: Duration(milliseconds: 200),
+            height: 60,
             decoration: BoxDecoration(
-              color: _getDayBackgroundColor(day, isWeekend, isSelected),
+              color: _getDayBackgroundColor(dayData, isWeekend, isSelected),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: _getDayBorderColor(day, isWeekend, isSelected),
+                color: _getDayBorderColor(dayData, isWeekend, isSelected),
                 width: isSelected ? 2 : 1,
               ),
               boxShadow: isSelected
@@ -301,40 +429,41 @@ class _CalendarScreenState extends State<CalendarScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  '$dayNumber',
+                  '${cellDate.day}',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: _getDayTextColor(day, isWeekend, isSelected),
+                    color: _getDayTextColor(dayData, isWeekend, isSelected),
                   ),
                 ),
-                SizedBox(height: 4),
-                if (day.hasWork && day.shifts.isNotEmpty) ...[
+                SizedBox(height: 2),
+                if (dayData.hasWork && dayData.shifts.isNotEmpty) ...[
                   Text(
-                    _getShiftStartTime(day.shifts.first.interval),
+                    _getShiftStartTime(dayData.shifts.first.interval),
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFFE30613),
                     ),
                   ),
                   Container(
-                    width: 12,
+                    width: 10,
                     height: 1,
                     color: Color(0xFFE30613),
                     margin: EdgeInsets.symmetric(vertical: 1),
                   ),
                   Text(
-                    _getShiftEndTime(day.shifts.first.interval),
+                    _getShiftEndTime(dayData.shifts.first.interval),
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFFE30613),
                     ),
                   ),
-                ] else if (day.hasWork && day.hoursWorked != '0:00') ...[
+                ] else if (dayData.hasWork &&
+                    dayData.hoursWorked != '0:00') ...[
                   Text(
-                    '${day.hoursWorked.split(':')[0]}h',
+                    '${dayData.hoursWorked.split(':')[0]}h',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -343,7 +472,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                   ),
                 ] else if (isWeekend) ...[
                   Container(
-                    width: 16,
+                    width: 12,
                     height: 2,
                     decoration: BoxDecoration(
                       color: Color(0xFFFF8F00),
@@ -363,14 +492,129 @@ class _CalendarScreenState extends State<CalendarScreen>
               ],
             ),
           ),
-        );
-      },
+        ));
+      }
+
+      // Add the week row
+      calendarRows.add(Container(
+        margin: EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: weekCells
+              .map((cell) => Expanded(
+                      child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 2),
+                    child: cell,
+                  )))
+              .toList(),
+        ),
+      ));
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        children: calendarRows,
+      ),
     );
   }
 
-  Widget _buildSelectedDayDetails(WorkDay day, int dayNumber) {
-    final dayName = _getDayName(dayNumber);
-    final isWeekend = _isWeekend((dayNumber - 1) % 7);
+  Widget _buildMonthDivider(String monthName) {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Color(0xFFE30613).withOpacity(0.3),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Container(
+            margin: EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Color(0xFFE30613),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFFE30613).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  monthName.toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFE30613).withOpacity(0.3),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedDayDetails() {
+    if (selectedDate == null) return Container();
+
+    // Find the day data for selected date
+    final dayIndex = selectedDate!.difference(widget.startDate).inDays;
+    final visibleDays = _getVisibleDays(widget.rosterData.getDays());
+
+    if (dayIndex < 0 || dayIndex >= visibleDays.length) return Container();
+
+    final day = visibleDays[dayIndex];
+    final dayName = _getDayName(selectedDate!.weekday);
+    final isWeekend = selectedDate!.weekday >= 6;
+    final monthNames = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
 
     return AnimatedContainer(
       duration: Duration(milliseconds: 300),
@@ -403,7 +647,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                 ),
                 child: Center(
                   child: Text(
-                    '$dayNumber',
+                    '${selectedDate!.day}',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -418,7 +662,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$dayName, $dayNumber. Juli',
+                      '$dayName, ${selectedDate!.day}. ${monthNames[selectedDate!.month]}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -438,7 +682,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                 ),
               ),
               IconButton(
-                onPressed: () => setState(() => selectedDay = null),
+                onPressed: () => setState(() => selectedDate = null),
                 icon: Icon(Icons.close, color: Colors.grey[500]),
               ),
             ],
@@ -465,7 +709,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                           ),
                           SizedBox(width: 8),
                           Text(
-                            '${_getShiftDisplayName(shift.name)}: ${shift.interval}',
+                            '${_getShiftDisplayName(shift.name)}: ${_formatShiftInterval(shift.interval)}',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -509,21 +753,146 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
+  /// Get header text based on visible date range
+  String _getHeaderText() {
+    final now = DateTime.now();
+    final monthNames = [
+      '',
+      'JANUAR',
+      'FEBRUAR',
+      'MÄRZ',
+      'APRIL',
+      'MAI',
+      'JUNI',
+      'JULI',
+      'AUGUST',
+      'SEPTEMBER',
+      'OKTOBER',
+      'NOVEMBER',
+      'DEZEMBER'
+    ];
+
+    if (now.day < 15) {
+      // Before 15th: Show only current month
+      return 'KALENDER ${monthNames[now.month]}';
+    } else {
+      // 15th and after: Show current + next month range
+      final startMonth = monthNames[widget.startDate.month];
+      final endMonth =
+          monthNames[widget.endDate.subtract(Duration(days: 1)).month];
+
+      if (startMonth == endMonth) {
+        return 'KALENDER $startMonth';
+      } else {
+        return 'KALENDER $startMonth-$endMonth';
+      }
+    }
+  }
+
+  /// Calculate total hours for visible days
+  int _calculateTotalHours(List<WorkDay> days) {
+    return days.fold(0, (sum, day) {
+      if (day.hoursWorked.isEmpty || day.hoursWorked == '0:00') return sum;
+      final hours = day.hoursWorked.split(':')[0];
+      return sum + (int.tryParse(hours) ?? 0);
+    });
+  }
+
+  /// Format shift interval to 24-hour format (same as day_card.dart)
+  String _formatShiftInterval(String interval) {
+    if (interval.isEmpty) return interval;
+
+    try {
+      // Handle intervals like "6:30 AM - 2:30 PM" or "06:00-14:30"
+      String separator = '-';
+      if (interval.contains(' - ')) {
+        separator = ' - ';
+      }
+
+      final parts = interval.split(separator);
+      if (parts.length == 2) {
+        final startTime = _convertTo24Hour(parts[0].trim());
+        final endTime = _convertTo24Hour(parts[1].trim());
+        return '$startTime$separator$endTime';
+      }
+
+      return _convertTo24Hour(interval);
+    } catch (e) {
+      print('Error formatting shift interval "$interval": $e');
+      return interval;
+    }
+  }
+
+  /// Simple 24-hour time converter
+  String _convertTo24Hour(String timeString) {
+    if (timeString.isEmpty) return timeString;
+
+    // If no AM/PM, assume already 24-hour
+    if (!timeString.toLowerCase().contains('am') &&
+        !timeString.toLowerCase().contains('pm')) {
+      return timeString;
+    }
+
+    final amPmRegex =
+        RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)', caseSensitive: false);
+    final match = amPmRegex.firstMatch(timeString);
+
+    if (match != null) {
+      int hour = int.parse(match.group(1)!);
+      final minute = int.parse(match.group(2)!);
+      final period = match.group(3)!.toUpperCase();
+
+      if (period == 'PM' && hour != 12) {
+        hour += 12;
+      } else if (period == 'AM' && hour == 12) {
+        hour = 0;
+      }
+
+      return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    }
+
+    return timeString;
+  }
+
+  Widget _buildQuickStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   // Helper methods
   String _getShiftStartTime(String interval) {
     final parts = interval.split('-');
-    return parts.isNotEmpty ? parts[0].trim() : '';
+    return parts.isNotEmpty ? _convertTo24Hour(parts[0].trim()) : '';
   }
 
   String _getShiftEndTime(String interval) {
     final parts = interval.split('-');
     if (parts.length >= 2) {
-      return parts[1].replaceAll('+1', '').trim();
+      return _convertTo24Hour(parts[1].replaceAll('+1', '').trim());
     }
     return '';
   }
 
-  String _getDayName(int dayNumber) {
+  String _getDayName(int weekday) {
     final days = [
       'Montag',
       'Dienstag',
@@ -533,11 +902,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       'Samstag',
       'Sonntag'
     ];
-    return days[(dayNumber - 1) % 7];
-  }
-
-  bool _isWeekend(int dayOfWeek) {
-    return dayOfWeek == 5 || dayOfWeek == 6; // Saturday (5) or Sunday (6)
+    return days[weekday - 1]; // weekday is 1-based
   }
 
   Color _getDayBackgroundColor(WorkDay day, bool isWeekend, bool isSelected) {

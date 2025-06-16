@@ -8,9 +8,15 @@ import 'calendar_screen.dart';
 
 class RosterDisplayScreen extends StatefulWidget {
   final WorkRosterData rosterData;
+  final DateTime startDate;
+  final DateTime endDate;
 
-  const RosterDisplayScreen({Key? key, required this.rosterData})
-      : super(key: key);
+  const RosterDisplayScreen({
+    Key? key,
+    required this.rosterData,
+    required this.startDate,
+    required this.endDate,
+  }) : super(key: key);
 
   @override
   _RosterDisplayScreenState createState() => _RosterDisplayScreenState();
@@ -32,12 +38,25 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
     _animationController.forward();
+
+    // Debug: Print date range information
+    _debugPrintDateInfo();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  void _debugPrintDateInfo() {
+    print('=== ROSTER DISPLAY DEBUG INFO ===');
+    print('Start date: ${widget.startDate}');
+    print('End date: ${widget.endDate}');
+    print(
+        'Date range spans ${widget.endDate.difference(widget.startDate).inDays} days');
+    print('Current date: ${DateTime.now()}');
+    print('Should show filtered view: ${DateTime.now().day < 15}');
   }
 
   void _exportRosterToPDF() async {
@@ -47,7 +66,11 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
 
   @override
   Widget build(BuildContext context) {
-    final days = widget.rosterData.getDays();
+    final allDays = widget.rosterData.getDays();
+    final visibleDays = _getVisibleDays(allDays);
+    final headerText = _getHeaderText();
+
+    print('All days: ${allDays.length}, Visible days: ${visibleDays.length}');
 
     return Scaffold(
       body: Container(
@@ -83,7 +106,7 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                               Icon(Icons.flight, color: Colors.white, size: 24),
                               SizedBox(width: 8),
                               Text(
-                                'DIENSTPLAN JULI',
+                                headerText,
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
@@ -98,9 +121,13 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                           onPressed: () => Navigator.push(
                             context,
                             PageRouteBuilder(
-                              pageBuilder: (context, animation,
-                                      secondaryAnimation) =>
-                                  CalendarScreen(rosterData: widget.rosterData),
+                              pageBuilder:
+                                  (context, animation, secondaryAnimation) =>
+                                      CalendarScreen(
+                                rosterData: widget.rosterData,
+                                startDate: widget.startDate,
+                                endDate: widget.endDate,
+                              ),
                               transitionsBuilder: (context, animation,
                                   secondaryAnimation, child) {
                                 return SlideTransition(
@@ -170,7 +197,7 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                             child: _buildSummaryItem(
                               Icons.calendar_month,
                               'Tage Gesamt',
-                              '${days.length}',
+                              '${visibleDays.length}',
                               Color(0xFFE30613),
                             ),
                           ),
@@ -183,7 +210,7 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                             child: _buildSummaryItem(
                               Icons.work,
                               'Arbeitstage',
-                              '${days.where((d) => d.hasWork).length}',
+                              '${visibleDays.where((d) => d.hasWork).length}',
                               Color(0xFF2E7D32),
                             ),
                           ),
@@ -196,7 +223,7 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                             child: _buildSummaryItem(
                               Icons.schedule,
                               'Stunden Gesamt',
-                              '${widget.rosterData.getTotalHours()}h',
+                              '${_calculateTotalHours(visibleDays)}h',
                               Color(0xFFFF8F00),
                             ),
                           ),
@@ -235,7 +262,7 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                       Expanded(
                         child: ListView.builder(
                           padding: EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: days.length,
+                          itemCount: visibleDays.length,
                           itemBuilder: (context, index) {
                             return AnimatedBuilder(
                               animation: _animationController,
@@ -259,7 +286,8 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                                   child: Opacity(
                                     opacity: animationValue,
                                     child: DayCard(
-                                        day: days[index], dayNumber: index + 1),
+                                        day: visibleDays[index],
+                                        dayNumber: _getDayNumber(index)),
                                   ),
                                 );
                               },
@@ -276,6 +304,94 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
         ),
       ),
     );
+  }
+
+  /// Filter days based on roster release schedule
+  List<WorkDay> _getVisibleDays(List<WorkDay> allDays) {
+    final now = DateTime.now();
+
+    if (now.day < 15) {
+      // Before 15th: Show only current month
+      final currentMonthDays = <WorkDay>[];
+
+      for (int i = 0; i < allDays.length; i++) {
+        final dayDate = widget.startDate.add(Duration(days: i));
+        if (dayDate.month == now.month && dayDate.year == now.year) {
+          currentMonthDays.add(allDays[i]);
+        }
+      }
+
+      print('Filtering to current month only: ${currentMonthDays.length} days');
+      return currentMonthDays;
+    } else {
+      // 15th and after: Show all days (current + next month)
+      print('Showing all days: ${allDays.length} days');
+      return allDays;
+    }
+  }
+
+  /// Get header text based on visible date range
+  String _getHeaderText() {
+    final now = DateTime.now();
+    final monthNames = [
+      '',
+      'JANUAR',
+      'FEBRUAR',
+      'MÄRZ',
+      'APRIL',
+      'MAI',
+      'JUNI',
+      'JULI',
+      'AUGUST',
+      'SEPTEMBER',
+      'OKTOBER',
+      'NOVEMBER',
+      'DEZEMBER'
+    ];
+
+    if (now.day < 15) {
+      // Before 15th: Show only current month
+      return 'DIENSTPLAN ${monthNames[now.month]}';
+    } else {
+      // 15th and after: Show current + next month range
+      final startMonth = monthNames[widget.startDate.month];
+      final endMonth = monthNames[widget.endDate
+          .subtract(Duration(days: 1))
+          .month]; // subtract 1 day since endDate is exclusive
+
+      if (startMonth == endMonth) {
+        return 'DIENSTPLAN $startMonth';
+      } else {
+        return 'DIENSTPLAN $startMonth-$endMonth';
+      }
+    }
+  }
+
+  /// Calculate total hours for visible days
+  int _calculateTotalHours(List<WorkDay> days) {
+    return days.fold(0, (sum, day) {
+      if (day.hoursWorked.isEmpty || day.hoursWorked == '0:00') return sum;
+      final hours = day.hoursWorked.split(':')[0];
+      return sum + (int.tryParse(hours) ?? 0);
+    });
+  }
+
+  /// Get day number for display - using the passed date range
+  int _getDayNumber(int visibleIndex) {
+    final allDays = widget.rosterData.getDays();
+    final visibleDays = _getVisibleDays(allDays);
+
+    // Find the actual index in the full day list
+    final visibleDay = visibleDays[visibleIndex];
+    final actualIndex = allDays.indexOf(visibleDay);
+
+    // Calculate the actual day number based on start date + index
+    final dayDate = widget.startDate.add(Duration(days: actualIndex));
+
+    print(
+        'Visible index $visibleIndex -> actual index $actualIndex -> day ${dayDate.day} of ${dayDate.month}/${dayDate.year}');
+
+    return dayDate.day;
   }
 
   Widget _buildSummaryItem(
