@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import '../models/roster_models.dart';
 import 'roster_display_screen.dart';
 
@@ -17,8 +18,14 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   final TextEditingController _jsonController = TextEditingController();
   String? _errorMessage;
   bool _hasText = false;
+  bool _isLoading = false;
+  bool _isInitializing = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+
+  // SharedPreferences keys
+  static const String _rosterDataKey = 'saved_roster'; // Use existing key
+  static const String _apiTokenKey = 'api_token'; // Use existing token key
 
   @override
   void initState() {
@@ -31,8 +38,9 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    _animationController.forward();
-    _loadSavedRoster(); // Load saved data on startup
+
+    // Check for existing data or fetch from API
+    _initializeRosterData();
   }
 
   @override
@@ -50,79 +58,171 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     });
   }
 
-  // Load saved roster data from SharedPreferences
-  void _loadSavedRoster() async {
+  /// Initialize roster data - check SharedPreferences first, then API
+  Future<void> _initializeRosterData() async {
+    setState(() {
+      _isInitializing = true;
+    });
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedJson = prefs.getString('saved_roster');
-      if (savedJson != null && savedJson.isNotEmpty) {
-        setState(() {
-          _jsonController.text = savedJson;
-          _hasText = true;
-        });
+      final savedRosterData = prefs.getString(_rosterDataKey);
 
-        // Show a subtle indication that data was loaded
-        Future.delayed(Duration(milliseconds: 500), () {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Icon(Icons.restore, color: Colors.white, size: 16),
-                    SizedBox(width: 8),
-                    Text('Gespeicherte Daten wiederhergestellt'),
-                  ],
-                ),
-                backgroundColor: Color(0xFF1976D2),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.only(bottom: 100, left: 16, right: 16),
-              ),
-            );
-          }
+      if (savedRosterData != null && savedRosterData.isNotEmpty) {
+        // We have saved data, navigate directly to display screen
+        print('Found saved roster data, navigating to display screen');
+
+        final jsonData = json.decode(savedRosterData);
+        final rosterData = WorkRosterData.fromJson(jsonData);
+
+        // Wait a moment for the animation, then navigate
+        await Future.delayed(Duration(milliseconds: 500));
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  RosterDisplayScreen(rosterData: rosterData),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          );
+        }
+        return;
+      }
+
+      // No saved data, try to fetch from API
+      print('No saved data found, attempting to fetch from API');
+      await _fetchRosterDataFromAPI();
+    } catch (e) {
+      print('Error during initialization: $e');
+      setState(() {
+        _errorMessage = 'Fehler beim Laden der Daten: ${e.toString()}';
+        _isInitializing = false;
+      });
+      _animationController.forward();
+    }
+  }
+
+  /// Fetch roster data from API
+  Future<void> _fetchRosterDataFromAPI() async {
+    try {
+      // Get API token from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final apiToken = prefs.getString(_apiTokenKey);
+
+      if (apiToken == null || apiToken.isEmpty) {
+        print('No API token available in SharedPreferences');
+        setState(() {
+          _isInitializing = false;
+          _errorMessage =
+              'Kein API-Token verfügbar. Bitte Daten manuell eingeben.';
         });
+        _animationController.forward();
+        return;
+      }
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Get current month date range
+      final now = DateTime.now();
+      final startDate = DateTime(now.year, now.month, 1);
+      final endDate = DateTime(now.year, now.month + 1, 1);
+
+      final startDateStr = _formatDate(startDate);
+      final endDateStr = _formatDate(endDate);
+
+      print('Fetching roster data for period: $startDateStr to $endDateStr');
+      print('Using API token: ${apiToken.substring(0, 8)}...');
+
+      final response = await http.get(
+        Uri.parse(
+            'https://austrian.plano-wfm.cloud/myplanoservice/api/monthjournal/data?start=$startDateStr&end=$endDateStr'),
+        headers: {
+          'Authorization': 'Bearer $apiToken',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(Duration(seconds: 30));
+
+      print('API response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+
+        // Validate that we can parse this data
+        final rosterData = WorkRosterData.fromJson(jsonData);
+
+        // Save to SharedPreferences
+        await _saveRosterData(response.body);
+
+        print('Successfully fetched and saved roster data');
+
+        // Navigate to display screen
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  RosterDisplayScreen(rosterData: rosterData),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeInOutCubic,
+                  )),
+                  child: child,
+                );
+              },
+            ),
+          );
+        }
+      } else {
+        throw Exception(
+            'API returned status ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      print('Error loading saved roster: $e');
+      print('Error fetching roster data from API: $e');
+      setState(() {
+        _errorMessage = 'Fehler beim Laden der API-Daten: ${e.toString()}';
+        _isLoading = false;
+        _isInitializing = false;
+      });
+      _animationController.forward();
     }
   }
 
-  // Save roster data to SharedPreferences
-  void _saveRosterData(String jsonData) async {
+  /// Format date as YYYY-MM-DD
+  String _formatDate(DateTime date) {
+    // ad 1 month to get next month
+    return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Save roster data to SharedPreferences
+  Future<void> _saveRosterData(String jsonData) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('saved_roster', jsonData);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.save, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Dienstplan automatisch gespeichert'),
-            ],
-          ),
-          backgroundColor: Color(0xFF2E7D32),
-          duration: Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      await prefs.setString(_rosterDataKey, jsonData);
+      print('Roster data saved to SharedPreferences');
     } catch (e) {
-      print('Error saving roster: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler beim Speichern: $e'),
-          backgroundColor: Color(0xFFE30613),
-        ),
-      );
+      print('Error saving roster data: $e');
+      throw Exception('Fehler beim Speichern der Daten');
     }
   }
 
-  // Clear saved data
-  void _clearSavedData() async {
+  /// Clear saved roster data
+  Future<void> _clearSavedData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('saved_roster');
+      await prefs.remove(_rosterDataKey);
 
       setState(() {
         _jsonController.clear();
@@ -155,8 +255,16 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  // Paste from clipboard
-  void _pasteFromClipboard() async {
+  /// Refresh data from API
+  Future<void> _refreshFromAPI() async {
+    setState(() {
+      _errorMessage = null;
+    });
+    await _fetchRosterDataFromAPI();
+  }
+
+  /// Paste from clipboard (for manual input)
+  Future<void> _pasteFromClipboard() async {
     try {
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
       if (clipboardData != null &&
@@ -217,6 +325,101 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
+  /// Check if API token exists in SharedPreferences
+  Future<bool> _hasApiToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final apiToken = prefs.getString(_apiTokenKey);
+      return apiToken != null && apiToken.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Build refresh button widget
+  Widget _buildRefreshButton() {
+    return FutureBuilder<bool>(
+      future: _hasApiToken(),
+      builder: (context, snapshot) {
+        final hasToken = snapshot.data ?? false;
+
+        if (!hasToken) {
+          return SizedBox.shrink(); // Don't show button if no token
+        }
+
+        return Column(
+          children: [
+            Container(
+              height: 56,
+              margin: EdgeInsets.only(bottom: 24),
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _refreshFromAPI,
+                child: _isLoading
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Wird geladen...'),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.refresh, size: 20),
+                          SizedBox(width: 12),
+                          Text(
+                            'Dienstplan von API laden',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF1976D2),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+            // Divider
+            Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'oder',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            SizedBox(height: 24),
+          ],
+        );
+      },
+    );
+  }
+
   void _parseAndNavigate() {
     try {
       final jsonText = _jsonController.text.trim();
@@ -261,6 +464,65 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Show loading screen during initialization
+    if (_isInitializing) {
+      return Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFFE30613),
+                Colors.white,
+              ],
+              stops: [0.0, 0.4],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(40),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.flight,
+                    size: 40,
+                    color: Color(0xFFE30613),
+                  ),
+                ),
+                SizedBox(height: 24),
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Dienstplan wird geladen...',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -342,8 +604,11 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   ),
                   SizedBox(height: 32),
 
+                  // Refresh from API button
+                  _buildRefreshButton(),
+
                   Text(
-                    'Dienstplan-Daten eingeben',
+                    'Dienstplan-Daten manuell eingeben',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,

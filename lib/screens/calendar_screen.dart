@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:planoviewer/screens/wish_screen.dart';
 import '../models/roster_models.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -38,137 +39,6 @@ class _CalendarScreenState extends State<CalendarScreen>
   void dispose() {
     _animationController.dispose();
     super.dispose();
-  }
-
-  void _exportToPDF() async {
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(color: Color(0xFFE30613)),
-              SizedBox(width: 16),
-              Text('PDF wird erstellt...'),
-            ],
-          ),
-        ),
-      );
-
-      final days = widget.rosterData.getDays();
-      String pdfContent = _generateTextReport(days);
-
-      Navigator.pop(context);
-
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.picture_as_pdf, color: Color(0xFFE30613)),
-              SizedBox(width: 8),
-              Text('Kalender Export'),
-            ],
-          ),
-          content: Container(
-            width: double.maxFinite,
-            height: 400,
-            child: SingleChildScrollView(
-              child: SelectableText(
-                pdfContent,
-                style: TextStyle(fontFamily: 'Courier', fontSize: 12),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: pdfContent));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('In Zwischenablage kopiert'),
-                    backgroundColor: Color(0xFF2E7D32),
-                  ),
-                );
-              },
-              child: Text('Kopieren'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Schließen'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler beim Erstellen: $e'),
-          backgroundColor: Color(0xFFE30613),
-        ),
-      );
-    }
-  }
-
-  String _generateTextReport(List<WorkDay> days) {
-    final buffer = StringBuffer();
-    buffer.writeln('AUSTRIAN AIRLINES - KALENDER JULI 2025');
-    buffer.writeln('=' * 50);
-    buffer.writeln();
-
-    final workingDays = days.where((d) => d.hasWork).length;
-    final totalHours = widget.rosterData.getTotalHours();
-    buffer.writeln('ÜBERSICHT:');
-    buffer.writeln('Arbeitstage: $workingDays von 31');
-    buffer.writeln('Gesamtstunden: ${totalHours}h');
-    buffer.writeln();
-
-    // Calendar format
-    buffer.writeln('Mo  Di  Mi  Do  Fr  Sa  So');
-    buffer.writeln('-' * 21);
-
-    // July 2024 starts on Monday
-    int dayCounter = 1;
-    for (int week = 0; week < 6; week++) {
-      String line = '';
-      for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
-        if (week == 0 && dayOfWeek == 0) {
-          // July 1st is Monday
-          line += dayCounter.toString().padLeft(2, ' ') + '  ';
-          dayCounter++;
-        } else if (dayCounter <= 31) {
-          line += dayCounter.toString().padLeft(2, ' ') + '  ';
-          dayCounter++;
-        } else {
-          line += '    ';
-        }
-      }
-      buffer.writeln(line);
-    }
-
-    buffer.writeln();
-    buffer.writeln('LEGENDE:');
-    buffer.writeln('W = Arbeitstag, F = Frei, WE = Wochenende');
-    buffer.writeln();
-
-    for (int i = 0; i < days.length; i++) {
-      final day = days[i];
-      final dayNumber = i + 1;
-      final dayName = _getDayName(dayNumber);
-      final isWeekend = _isWeekend((dayNumber - 1) % 7);
-
-      if (day.hasWork) {
-        buffer.writeln(
-            '${dayNumber.toString().padLeft(2, '0')}. $dayName: ${day.shifts.isNotEmpty ? day.shifts.first.interval : day.hoursWorked}');
-      }
-    }
-
-    buffer.writeln();
-    buffer.writeln('Erstellt: ${DateTime.now().toString().substring(0, 19)}');
-
-    return buffer.toString();
   }
 
   @override
@@ -227,10 +97,16 @@ class _CalendarScreenState extends State<CalendarScreen>
                             ),
                           ),
                           IconButton(
-                            onPressed: () => _exportToPDF(),
+                            onPressed: () => Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ShiftCalendarScreen(),
+                              ),
+                            ),
                             icon:
-                                Icon(Icons.picture_as_pdf, color: Colors.white),
-                            tooltip: 'PDF exportieren',
+                                Icon(Icons.calendar_month, color: Colors.white),
+                            tooltip: 'Wunsch eintragen',
                           ),
                         ],
                       ),
