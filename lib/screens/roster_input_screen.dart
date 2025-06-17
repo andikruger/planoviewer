@@ -244,7 +244,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     if (now.day < 20) {
       // Before 15th: Show only current month
       startDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
-      endDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
+      endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
       print(
           'Before 15th - fetching current month only: ${_getMonthName(now.month)}');
     } else {
