@@ -194,12 +194,25 @@ class PDFExportService {
 
   // Generate filename based on actual date range
   String _generateFilename(String timestamp) {
-    final monthNames = ['', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-                       'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-    
+    final monthNames = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
+
     final startMonth = monthNames[startDate.month];
     final endMonth = monthNames[endDate.month];
-    
+
     if (startDate.month == endDate.month) {
       // Same month
       return 'Austrian_Airlines_Dienstplan_${startMonth}_${startDate.year}_$timestamp.pdf';
@@ -211,12 +224,25 @@ class PDFExportService {
 
   // Generate PDF header text based on actual date range
   String _getPDFHeaderText() {
-    final monthNames = ['', 'JANUAR', 'FEBRUAR', 'MÄRZ', 'APRIL', 'MAI', 'JUNI',
-                       'JULI', 'AUGUST', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DEZEMBER'];
-    
+    final monthNames = [
+      '',
+      'JANUAR',
+      'FEBRUAR',
+      'MÄRZ',
+      'APRIL',
+      'MAI',
+      'JUNI',
+      'JULI',
+      'AUGUST',
+      'SEPTEMBER',
+      'OKTOBER',
+      'NOVEMBER',
+      'DEZEMBER'
+    ];
+
     final startMonth = monthNames[startDate.month];
     final endMonth = monthNames[endDate.month];
-    
+
     if (startDate.month == endDate.month) {
       // Same month
       return 'DIENSTPLAN $startMonth ${startDate.year}';
@@ -235,11 +261,24 @@ class PDFExportService {
     final totalDays = days.length;
 
     // Calculate the period text for staff info
-    final monthNames = ['', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-                       'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+    final monthNames = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
+    ];
     final startMonth = monthNames[startDate.month];
     final endMonth = monthNames[endDate.month];
-    final periodText = startDate.month == endDate.month 
+    final periodText = startDate.month == endDate.month
         ? '$startMonth ${startDate.year}'
         : '$startMonth-$endMonth ${startDate.year}';
 
@@ -271,7 +310,7 @@ class PDFExportService {
                         ),
                       ),
                       pw.Text(
-                        'Ground Roster System',
+                        'Dienstplan',
                         style: pw.TextStyle(
                           fontSize: 12,
                           color: PdfColors.white,
@@ -294,38 +333,38 @@ class PDFExportService {
             pw.SizedBox(height: 20),
 
             // Crew Information Section
-            pw.Container(
-              padding: pw.EdgeInsets.all(15),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColor.fromHex('#E0E0E0')),
-                borderRadius: pw.BorderRadius.circular(8),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'STAFF INFORMATION',
-                    style: pw.TextStyle(
-                        fontSize: 16, fontWeight: pw.FontWeight.bold),
-                  ),
-                  pw.SizedBox(height: 10),
-                  pw.Row(
-                    children: [
-                      pw.Expanded(child: pw.Text('Name: [Zu ergänzen]')),
-                      pw.Expanded(
-                          child: pw.Text('Mitarbeiter-Nr: [Zu ergänzen]')),
-                    ],
-                  ),
-                  pw.SizedBox(height: 5),
-                  pw.Row(
-                    children: [
-                      pw.Expanded(child: pw.Text('Abteilung: O/GPO')),
-                      pw.Expanded(child: pw.Text('Periode: $periodText')),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            // pw.Container(
+            //   padding: pw.EdgeInsets.all(15),
+            //   decoration: pw.BoxDecoration(
+            //     border: pw.Border.all(color: PdfColor.fromHex('#E0E0E0')),
+            //     borderRadius: pw.BorderRadius.circular(8),
+            //   ),
+            //   child: pw.Column(
+            //     crossAxisAlignment: pw.CrossAxisAlignment.start,
+            //     children: [
+            //       pw.Text(
+            //         'STAFF INFORMATION',
+            //         style: pw.TextStyle(
+            //             fontSize: 16, fontWeight: pw.FontWeight.bold),
+            //       ),
+            //       pw.SizedBox(height: 10),
+            //       pw.Row(
+            //         children: [
+            //           pw.Expanded(child: pw.Text('Name: [Zu ergänzen]')),
+            //           pw.Expanded(
+            //               child: pw.Text('Mitarbeiter-Nr: [Zu ergänzen]')),
+            //         ],
+            //       ),
+            //       pw.SizedBox(height: 5),
+            //       pw.Row(
+            //         children: [
+            //           pw.Expanded(child: pw.Text('Abteilung: O/GPO')),
+            //           pw.Expanded(child: pw.Text('Periode: $periodText')),
+            //         ],
+            //       ),
+            //     ],
+            //   ),
+            // ),
 
             pw.SizedBox(height: 20),
 
@@ -454,7 +493,8 @@ class PDFExportService {
                   final day = days[index];
                   final actualDate = startDate.add(Duration(days: index));
                   final dayName = _getDayNameGerman(actualDate.weekday);
-                  final isWeekend = actualDate.weekday >= 6; // 6 = Saturday, 7 = Sunday
+                  final isWeekend =
+                      actualDate.weekday >= 6; // 6 = Saturday, 7 = Sunday
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
@@ -479,7 +519,9 @@ class PDFExportService {
                         padding: pw.EdgeInsets.all(8),
                         child: pw.Text(
                           day.shifts.isNotEmpty
-                              ? day.shifts.map((s) => _formatShiftInterval(s.interval)).join('\n')
+                              ? day.shifts
+                                  .map((s) => _formatShiftInterval(s.interval))
+                                  .join('\n')
                               : (isWeekend ? 'Wochenende' : 'Frei'),
                           style: pw.TextStyle(fontSize: 10),
                         ),
@@ -537,29 +579,42 @@ class PDFExportService {
 
   /// Format date for PDF display (DD. Month YYYY)
   String _formatDateForPDF(DateTime date) {
-    final monthNames = ['', 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
-                       'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+    final monthNames = [
+      '',
+      'Jan',
+      'Feb',
+      'Mär',
+      'Apr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Dez'
+    ];
     return '${date.day}. ${monthNames[date.month]} ${date.year}';
   }
 
   /// Format shift interval to 24-hour format for PDF
   String _formatShiftInterval(String interval) {
     if (interval.isEmpty) return interval;
-    
+
     try {
       // Handle intervals like "6:30 AM - 2:30 PM" or "06:00-14:30"
       String separator = '-';
       if (interval.contains(' - ')) {
         separator = ' - ';
       }
-      
+
       final parts = interval.split(separator);
       if (parts.length == 2) {
         final startTime = _convertTo24Hour(parts[0].trim());
         final endTime = _convertTo24Hour(parts[1].trim());
         return '$startTime$separator$endTime';
       }
-      
+
       return _convertTo24Hour(interval);
     } catch (e) {
       return interval; // Return original if conversion fails
@@ -569,30 +624,31 @@ class PDFExportService {
   /// Convert time to 24-hour format
   String _convertTo24Hour(String timeString) {
     if (timeString.isEmpty) return timeString;
-    
+
     // If no AM/PM, assume already 24-hour
-    if (!timeString.toLowerCase().contains('am') && 
+    if (!timeString.toLowerCase().contains('am') &&
         !timeString.toLowerCase().contains('pm')) {
       return timeString;
     }
-    
-    final amPmRegex = RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)', caseSensitive: false);
+
+    final amPmRegex =
+        RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)', caseSensitive: false);
     final match = amPmRegex.firstMatch(timeString);
-    
+
     if (match != null) {
       int hour = int.parse(match.group(1)!);
       final minute = int.parse(match.group(2)!);
       final period = match.group(3)!.toUpperCase();
-      
+
       if (period == 'PM' && hour != 12) {
         hour += 12;
       } else if (period == 'AM' && hour == 12) {
         hour = 0;
       }
-      
+
       return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
     }
-    
+
     return timeString;
   }
 
