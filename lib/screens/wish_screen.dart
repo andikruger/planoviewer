@@ -386,7 +386,7 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Möchten Sie sich wirklich abmelden?'),
+            Text('Möchstest du dich wirklich abmelden?'),
             SizedBox(height: 12),
             Container(
               padding: EdgeInsets.all(12),
@@ -414,7 +414,7 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
                         ),
                         SizedBox(height: 4),
                         Text(
-                          '• Den gespeicherten API-Token löschen\n• Alle geplanten Schichten entfernen\n• Sie zur Token-Eingabe zurückführen',
+                          '• Den gespeicherten API-Token löschen\n• Alle geplanten Schichten entfernen\n• Dich zur Token-Eingabe zurückführen',
                           style: TextStyle(
                             color: Colors.orange[700],
                             fontSize: 12,
@@ -498,7 +498,7 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
           ],
         ),
         content: Text(
-          'Möchten Sie wirklich einen neuen API-Token eingeben? Dies wird alle aktuellen Daten zurücksetzen.',
+          'Möchtest du wirklich einen neuen API-Token eingeben? Dies wird alle aktuellen Daten zurücksetzen.',
         ),
         actions: [
           TextButton(
@@ -1617,7 +1617,7 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
       child: Column(
         children: [
           Text(
-            'Wählen Sie die Zeit, in der Sie frei sein möchten:',
+            'Wähle die Zeit in der du frei haben willst:',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             textAlign: TextAlign.center,
           ),
@@ -1770,7 +1770,7 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-            'Möchten Sie den ${isShift ? 'Schicht' : 'Freizeiteintrag'} wirklich entfernen?'),
+            'Willst du  ${isShift ? ' die Schicht' : 'den Freizeiteintrag'} wirklich entfernen?'),
         SizedBox(height: 12),
         Container(
           padding: EdgeInsets.all(12),

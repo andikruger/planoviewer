@@ -278,7 +278,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final jsonText = _jsonController.text.trim();
       if (jsonText.isEmpty) {
         setState(() {
-          _errorMessage = 'Bitte fügen Sie JSON-Daten ein';
+          _errorMessage = 'Bitte füge JSON-Daten ein';
         });
         return;
       }
@@ -356,8 +356,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
           initialToken: isEdit ? _currentApiToken : null,
           title: isEdit ? 'API-Token bearbeiten' : 'API-Token eingeben',
           subtitle: isEdit
-              ? 'Geben Sie einen neuen API-Token ein'
-              : 'Geben Sie Ihren API-Token ein, um automatisch Dienstpläne zu laden',
+              ? 'Gib einen neuen API-Token ein'
+              : 'Gib deinen Ihren API-Token ein, um automatisch Dienstpläne zu laden',
           onTokenSubmitted: () {
             // This callback is called when validation starts
           },
@@ -717,7 +717,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Geben Sie Ihren API-Token ein, um automatisch Dienstpläne zu laden',
+                      'Gib deinen API-Token ein, um automatisch Dienstpläne zu laden',
                       style: TextStyle(
                         fontSize: 14,
                         color: Color(0xFFFF8F00),
@@ -771,7 +771,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
           ],
         ),
         content: Text(
-            'Möchten Sie den API-Token wirklich entfernen? Sie können danach keine automatischen Dienstplan-Updates mehr laden.'),
+            'Möchstest du den API-Token wirklich entfernen? Du kannst danach keine automatischen Dienstplan-Updates mehr laden.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -950,7 +950,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Alternativ können Sie JSON-Daten direkt eingeben',
+                    'Alternativ kannst du die JSON-Daten direkt eingeben',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[600],

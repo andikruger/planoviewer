@@ -14,7 +14,7 @@ class TokenInputDialog extends StatefulWidget {
     this.onTokenSubmitted,
     this.initialToken,
     this.title = 'API-Token erforderlich',
-    this.subtitle = 'Geben Sie Ihren API-Token ein, um fortzufahren',
+    this.subtitle = 'Gib deinen API-Token ein, um fortzufahren',
   }) : super(key: key);
 
   @override
@@ -76,7 +76,7 @@ class _TokenInputDialogState extends State<TokenInputDialog>
     // Basic validation
     if (token.isEmpty) {
       setState(() {
-        _errorMessage = 'Bitte geben Sie einen API-Token ein';
+        _errorMessage = 'Bitte gib einen API-Token ein';
         _isLoading = false;
       });
       return;
@@ -241,7 +241,7 @@ class _TokenInputDialogState extends State<TokenInputDialog>
               obscureText: !_isTokenVisible,
               onSubmitted: (_) => _validateAndSubmit(),
               decoration: InputDecoration(
-                hintText: 'sk-xxxxxxxxxxxxxxxxxxxxxxxx',
+                hintText: 'eyJhb-xxxxxxxxxxxxxxxxxxxxxxxx',
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.all(16),
                 suffixIcon: Row(
@@ -335,7 +335,7 @@ class _TokenInputDialogState extends State<TokenInputDialog>
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Ihr API-Token finden Sie in den Einstellungen Ihres Kontos oder wurde Ihnen per E-Mail zugesandt.',
+                        'Im Authorization-Header des API-Requests, in der Form "Bearer <API-Token>".',
                         style: TextStyle(
                           color: Colors.blue[700],
                           fontSize: 12,

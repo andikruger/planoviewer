@@ -115,57 +115,53 @@ class CalendarUtils {
 
   static ShiftType getShiftType(String timeRange) {
     final start = parseTime(timeRange.split('-')[0]);
-    if (start == null) return ShiftType.regular;
+    if (start == null) return ShiftType.day;
 
-    if (start < 6 * 60) return ShiftType.earlyMorning; // Before 06:00
-    if (start < 9 * 60) return ShiftType.morning; // 06:00 - 08:59
-    if (start < 14 * 60) return ShiftType.regular; // 09:00 - 13:59
-    if (start < 18 * 60) return ShiftType.afternoon; // 14:00 - 17:59
-    return ShiftType.evening; // 18:00+
+    if (start < 6 * 60) return ShiftType.early; // Before 06:00
+    if (start < 9 * 60) return ShiftType.day; // 06:00 - 08:59
+    if (start < 14 * 60) return ShiftType.late; // 09:00 - 13:59
+    if (start < 18 * 60) return ShiftType.night; // 14:00 - 17:59
+    return ShiftType.day;
   }
 
   static Color getShiftTypeColor(ShiftType type) {
     switch (type) {
-      case ShiftType.earlyMorning:
+      case ShiftType.early:
         return Color(0xFF3F51B5);
-      case ShiftType.morning:
+      case ShiftType.day:
         return Color(0xFF2196F3);
-      case ShiftType.regular:
+      case ShiftType.late:
         return Color(0xFFE30613);
-      case ShiftType.afternoon:
+      case ShiftType.night:
         return Color(0xFFFF8F00);
-      case ShiftType.evening:
-        return Color(0xFF9C27B0);
     }
   }
 
   static IconData getShiftTypeIcon(ShiftType type) {
     switch (type) {
-      case ShiftType.earlyMorning:
-        return Icons.nightlight_round;
-      case ShiftType.morning:
+      case ShiftType.early:
         return Icons.wb_sunny;
-      case ShiftType.regular:
+      case ShiftType.day:
         return Icons.work;
-      case ShiftType.afternoon:
-        return Icons.wb_twilight;
-      case ShiftType.evening:
+      case ShiftType.late:
+        return Icons.wb_twighlight;
+
+      case ShiftType.night:
         return Icons.nights_stay;
     }
   }
 
   static String getShiftTypeName(ShiftType type) {
     switch (type) {
-      case ShiftType.earlyMorning:
+      case ShiftType.early:
         return 'Frühdienst';
-      case ShiftType.morning:
-        return 'Morgendienst';
-      case ShiftType.regular:
+      case ShiftType.day:
         return 'Tagdienst';
-      case ShiftType.afternoon:
-        return 'Nachmittagdienst';
-      case ShiftType.evening:
+      case ShiftType.late:
         return 'Spätdienst';
+
+      case ShiftType.night:
+        return 'Nachtdienst';
     }
   }
 

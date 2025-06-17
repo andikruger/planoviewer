@@ -61,11 +61,10 @@ class DayOff {
 }
 
 enum ShiftType {
-  earlyMorning,
-  morning,
-  regular,
-  afternoon,
-  evening,
+  early,
+  day,
+  late,
+  night,
 }
 
 enum DayType {
