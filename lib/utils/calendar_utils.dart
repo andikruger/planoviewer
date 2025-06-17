@@ -123,11 +123,11 @@ class CalendarUtils {
     // 08:00 - 11:59 = Day (480 - 719 minutes)
     if (start >= 8 * 60 && start < 12 * 60) return ShiftType.day;
 
-    // 12:00 - 18:30 = Late (720 - 1110 minutes)
-    if (start >= 12 * 60 && start <= 18 * 60 + 30) return ShiftType.late;
+    // 12:00 - 18:29 = Late (720 - 1109 minutes) - Changed to < 18:30
+    if (start >= 12 * 60 && start < 18 * 60 + 30) return ShiftType.late;
 
     // 18:30+ = Night (1110+ minutes)
-    if (start > 18 * 60 + 30) return ShiftType.night;
+    if (start >= 18 * 60 + 30) return ShiftType.night;
 
     // Default fallback for times outside defined ranges
     return ShiftType.day;
