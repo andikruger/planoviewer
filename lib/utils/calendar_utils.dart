@@ -117,10 +117,12 @@ class CalendarUtils {
     final start = parseTime(timeRange.split('-')[0]);
     if (start == null) return ShiftType.day;
 
-    if (start < 6 * 60) return ShiftType.early; // Before 06:00
-    if (start < 9 * 60) return ShiftType.day; // 06:00 - 08:59
-    if (start < 14 * 60) return ShiftType.late; // 09:00 - 13:59
-    if (start < 18 * 60) return ShiftType.night; // 14:00 - 17:59
+    if (start < 8 * 60) return ShiftType.early; // Before 08:00
+    if (start < 9 * 60) return ShiftType.day; // 08:00 - 11:59
+    if (start < 12 * 60) return ShiftType.late; // 12:00 - 13:59
+
+    if (start < 18 * 60) return ShiftType.night;
+
     return ShiftType.day;
   }
 
