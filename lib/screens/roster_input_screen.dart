@@ -23,7 +23,10 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   bool _isInitializing = true;
   String? _currentApiToken;
   late AnimationController _animationController;
+  late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _pulseAnimation;
 
   // SharedPreferences keys
   static const String _rosterDataKey = 'saved_roster';
@@ -33,15 +36,38 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   void initState() {
     super.initState();
     _jsonController.addListener(_onTextChanged);
+
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 800),
+      duration: Duration(milliseconds: 1000),
       vsync: this,
     );
+
+    _pulseController = AnimationController(
+      duration: Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutQuart,
+      ),
     );
 
-    // Check for existing data or fetch from API
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.elasticOut,
+      ),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
     _initializeRosterData();
   }
 
@@ -50,6 +76,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     _jsonController.removeListener(_onTextChanged);
     _jsonController.dispose();
     _animationController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -60,9 +87,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     });
   }
 
-  /// Initialize roster data - check SharedPreferences first, then API
-
-  /// Initialize roster data - check SharedPreferences first, then API
+  // [Keep all the existing backend methods - they remain unchanged]
   Future<void> _initializeRosterData() async {
     setState(() {
       _isInitializing = true;
@@ -75,29 +100,24 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final savedStartDate = prefs.getString('roster_start_date');
       final savedEndDate = prefs.getString('roster_end_date');
 
-      // Store current API token for display
       _currentApiToken = apiToken;
 
       if (savedRosterData != null && savedRosterData.isNotEmpty) {
-        // We have saved data, navigate directly to display screen
         print('Found saved roster data, navigating to display screen');
 
         final jsonData = json.decode(savedRosterData);
         final rosterData = WorkRosterData.fromJson(jsonData);
 
-        // Parse saved dates or calculate them
         DateTime startDate, endDate;
         if (savedStartDate != null && savedEndDate != null) {
           startDate = DateTime.parse(savedStartDate);
           endDate = DateTime.parse(savedEndDate);
         } else {
-          // Fallback to current date calculation
           final (startDateStr, endDateStr) = _getDateRange(DateTime.now());
           startDate = DateTime.parse(startDateStr);
           endDate = DateTime.parse(endDateStr);
         }
 
-        // Wait a moment for the animation, then navigate
         await Future.delayed(Duration(milliseconds: 500));
 
         if (mounted) {
@@ -120,12 +140,10 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         return;
       }
 
-      // No saved data, try to fetch from API if token exists
       if (apiToken != null && apiToken.isNotEmpty) {
         print('No saved data found, attempting to fetch from API');
         await _fetchRosterDataFromAPI();
       } else {
-        // No token, show manual input screen
         setState(() {
           _isInitializing = false;
         });
@@ -141,10 +159,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Fetch roster data from API
   Future<void> _fetchRosterDataFromAPI() async {
     try {
-      // Get API token from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       final apiToken = prefs.getString(_apiTokenKey);
 
@@ -162,7 +178,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         _isLoading = true;
       });
 
-      // Get date range based on current date
       final now = DateTime.now();
       final (startDateStr, endDateStr) = _getDateRange(now);
       final startDate = DateTime.parse(startDateStr);
@@ -184,17 +199,13 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body);
-
-        // Validate that we can parse this data
         final rosterData = WorkRosterData.fromJson(jsonData);
 
-        // Save roster data and date range
         await _saveRosterData(response.body);
         await _saveDateRange(startDate, endDate);
 
         print('Successfully fetched and saved roster data');
 
-        // Navigate to display screen with date range
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -236,19 +247,16 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Get date range based on roster release schedule
   (String, String) _getDateRange(DateTime now) {
     final String startDateStr;
     final String endDateStr;
 
     if (now.day < 20) {
-      // Before 15th: Show only current month
       startDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
       endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
       print(
           'Before 15th - fetching current month only: ${_getMonthName(now.month)}');
     } else {
-      // 15th and after: Show current month + next month
       startDateStr = _formatDate(DateTime(now.year, now.month, 1));
       endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
       final nextMonth = now.month == 12 ? 1 : now.month + 1;
@@ -259,7 +267,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     return (startDateStr, endDateStr);
   }
 
-  /// Save date range to SharedPreferences
   Future<void> _saveDateRange(DateTime startDate, DateTime endDate) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -272,7 +279,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Parse manual JSON input and navigate
   void _parseAndNavigate() {
     try {
       final jsonText = _jsonController.text.trim();
@@ -286,13 +292,11 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final jsonData = json.decode(jsonText);
       final rosterData = WorkRosterData.fromJson(jsonData);
 
-      // For manual input, calculate current date range
       final now = DateTime.now();
       final (startDateStr, endDateStr) = _getDateRange(now);
       final startDate = DateTime.parse(startDateStr);
       final endDate = DateTime.parse(endDateStr);
 
-      // Save the roster data and date range
       _saveRosterData(jsonText);
       _saveDateRange(startDate, endDate);
 
@@ -326,7 +330,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Get month name for logging
   String _getMonthName(int month) {
     const monthNames = [
       '',
@@ -346,7 +349,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     return monthNames[month];
   }
 
-  /// Show token input dialog
   Future<void> _showTokenDialog({bool isEdit = false}) async {
     final result = await showDialog<String>(
       context: context,
@@ -358,41 +360,31 @@ class _RosterInputScreenState extends State<RosterInputScreen>
           subtitle: isEdit
               ? 'Gib einen neuen API-Token ein'
               : 'Gib deinen Ihren API-Token ein, um automatisch Dienstpläne zu laden',
-          onTokenSubmitted: () {
-            // This callback is called when validation starts
-          },
+          onTokenSubmitted: () {},
         );
       },
     );
 
     if (result != null && result.isNotEmpty) {
-      // Token was provided, save it
       await _saveApiToken(result);
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Text('API-Token erfolgreich gespeichert'),
-            ],
-          ),
-          backgroundColor: Color(0xFF2E7D32),
+          content: Text('✓ API-Token erfolgreich gespeichert'),
+          backgroundColor: Color(0xFF111827),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
         ),
       );
 
-      // Try to fetch roster data with new token
       if (!isEdit) {
         await _fetchRosterDataFromAPI();
       }
     }
   }
 
-  /// Save API token to SharedPreferences
   Future<void> _saveApiToken(String token) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -407,7 +399,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Clear API token
   Future<void> _clearApiToken() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -418,16 +409,12 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.info, color: Colors.white),
-              SizedBox(width: 12),
-              Text('API-Token entfernt'),
-            ],
-          ),
-          backgroundColor: Colors.blue[600],
+          content: Text('API-Token entfernt'),
+          backgroundColor: Color(0xFF111827),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
         ),
       );
     } catch (e) {
@@ -435,12 +422,10 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Format date as YYYY-MM-DD
   String _formatDate(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  /// Save roster data to SharedPreferences
   Future<void> _saveRosterData(String jsonData) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -452,7 +437,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
-  /// Clear saved roster data
   Future<void> _clearSavedData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -466,16 +450,12 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.delete_sweep, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Gespeicherte Daten gelöscht'),
-            ],
-          ),
-          backgroundColor: Color(0xFFFF8F00),
-          duration: Duration(seconds: 2),
+          content: Text('Daten gelöscht'),
+          backgroundColor: Color(0xFF111827),
           behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
         ),
       );
     } catch (e) {
@@ -483,13 +463,12 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Fehler beim Löschen: $e'),
-          backgroundColor: Color(0xFFE30613),
+          backgroundColor: Color(0xFFDC2626),
         ),
       );
     }
   }
 
-  /// Refresh data from API
   Future<void> _refreshFromAPI() async {
     setState(() {
       _errorMessage = null;
@@ -497,7 +476,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     await _fetchRosterDataFromAPI();
   }
 
-  /// Paste from clipboard (for manual input)
   Future<void> _pasteFromClipboard() async {
     try {
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
@@ -512,31 +490,23 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.content_paste, color: Colors.white, size: 16),
-                SizedBox(width: 8),
-                Text('Aus Zwischenablage eingefügt'),
-              ],
-            ),
-            backgroundColor: Color(0xFF1976D2),
-            duration: Duration(seconds: 2),
+            content: Text('✓ Eingefügt'),
+            backgroundColor: Color(0xFF111827),
             behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white, size: 16),
-                SizedBox(width: 8),
-                Text('Zwischenablage ist leer'),
-              ],
-            ),
-            backgroundColor: Color(0xFFFF8F00),
-            duration: Duration(seconds: 2),
+            content: Text('Zwischenablage ist leer'),
+            backgroundColor: Color(0xFF111827),
             behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
           ),
         );
       }
@@ -544,249 +514,57 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       print('Error pasting from clipboard: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Fehler beim Einfügen: $e'),
-            ],
-          ),
-          backgroundColor: Color(0xFFE30613),
-          duration: Duration(seconds: 3),
+          content: Text('Fehler beim Einfügen'),
+          backgroundColor: Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
         ),
       );
     }
   }
 
-  /// Parse manual JSON input and navigate
-
-  /// Build API token section
-  Widget _buildApiTokenSection() {
-    final hasToken = _currentApiToken != null && _currentApiToken!.isNotEmpty;
-    final maskedToken = hasToken
-        ? '${_currentApiToken!.substring(0, 8)}${'*' * (_currentApiToken!.length - 12)}${_currentApiToken!.substring(_currentApiToken!.length - 4)}'
-        : null;
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 32),
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: hasToken
-              ? Color(0xFF2E7D32).withOpacity(0.3)
-              : Color(0xFFFF8F00).withOpacity(0.3),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                hasToken ? Icons.verified_user : Icons.key,
-                color: hasToken ? Color(0xFF2E7D32) : Color(0xFFFF8F00),
-                size: 24,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  hasToken
-                      ? 'API-Token konfiguriert'
-                      : 'API-Token erforderlich',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: hasToken ? Color(0xFF2E7D32) : Color(0xFFFF8F00),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16),
-          if (hasToken) ...[
-            // Show current token info
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Color(0xFF2E7D32).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Color(0xFF2E7D32).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Token aktiv:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF2E7D32),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          maskedToken!,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontFamily: 'monospace',
-                            color: Color(0xFF2E7D32),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Action buttons for existing token
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _refreshFromAPI,
-                    icon: _isLoading
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white)))
-                        : Icon(Icons.refresh, size: 18),
-                    label: Text(_isLoading ? 'Lädt...' : 'Daten laden'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF1976D2),
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _showTokenDialog(isEdit: true),
-                  icon: Icon(Icons.edit, size: 18),
-                  label: Text('Bearbeiten'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF8F00),
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => _showRemoveTokenDialog(),
-                  icon: Icon(Icons.delete_outline, color: Colors.red[600]),
-                  tooltip: 'Token entfernen',
-                ),
-              ],
-            ),
-          ] else ...[
-            // Show token input prompt
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Color(0xFFFF8F00).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Color(0xFFFF8F00).withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Color(0xFFFF8F00), size: 20),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Gib deinen API-Token ein, um automatisch Dienstpläne zu laden',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFFFF8F00),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Add token button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _showTokenDialog(),
-                icon: Icon(Icons.add, size: 20),
-                label: Text(
-                  'API-Token eingeben',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF8F00),
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// Show remove token confirmation dialog
   void _showRemoveTokenDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange[600]),
-            SizedBox(width: 8),
-            Text('Token entfernen'),
-          ],
+        backgroundColor: Color(0xFFFAFAFA),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Token entfernen?',
+          style: TextStyle(
+            color: Color(0xFF111827),
+            fontWeight: FontWeight.w600,
+          ),
         ),
         content: Text(
-            'Möchstest du den API-Token wirklich entfernen? Du kannst danach keine automatischen Dienstplan-Updates mehr laden.'),
+          'Der API-Token wird dauerhaft entfernt und automatische Updates sind nicht mehr möglich.',
+          style: TextStyle(
+            color: Color(0xFF6B7280),
+            height: 1.5,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('Abbrechen'),
+            child: Text(
+              'Abbrechen',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               _clearApiToken();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[600],
-              foregroundColor: Colors.white,
+            child: Text(
+              'Entfernen',
+              style: TextStyle(
+                color: Color(0xFFDC2626),
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            child: Text('Entfernen'),
           ),
         ],
       ),
@@ -795,226 +573,191 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Show loading screen during initialization
     if (_isInitializing) {
       return Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFFE30613),
-                Colors.white,
-              ],
-              stops: [0.0, 0.4],
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
+        backgroundColor: Color(0xFFFAFAFA),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ScaleTransition(
+                scale: _pulseAnimation,
+                child: Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(40),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: Offset(0, 10),
-                      ),
-                    ],
+                    color: Color(0xFF111827),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Icon(
                     Icons.flight,
                     size: 40,
-                    color: Color(0xFFE30613),
-                  ),
-                ),
-                SizedBox(height: 24),
-                CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Dienstplan wird geladen...',
-                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ],
-            ),
+              ),
+              SizedBox(height: 32),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF111827)),
+                ),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Lade Dienstplan...',
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE30613), // Austrian Airlines Red
-              Color(0xFFFFFFFF), // White
-            ],
-            stops: [0.0, 0.7],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: 20),
-                  // Austrian Airlines Logo Area
-                  Container(
-                    padding: EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.flight,
-                              size: 32,
-                              color: Color(0xFFE30613),
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'AUSTRIAN',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFE30613),
-                                letterSpacing: 2,
+      backgroundColor: Color(0xFFFAFAFA),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Minimalist Header
+                    Container(
+                      margin: EdgeInsets.only(bottom: 48),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFE30613),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        Container(
-                          height: 2,
-                          width: 60,
-                          decoration: BoxDecoration(
-                            color: Color(0xFFE30613),
-                            borderRadius: BorderRadius.circular(1),
+                              SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'AUSTRIAN',
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF111827),
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Ground Roster',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF6B7280),
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'Ground Roster System',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[700],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 32),
 
-                  // API Token Section
-                  _buildApiTokenSection(),
+                    // API Token Section
+                    _buildApiTokenSection(),
 
-                  // Manual input section
-                  Text(
-                    'Manuell eingeben',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
+                    SizedBox(height: 48),
+
+                    // Manual Input Section
+                    Text(
+                      'Manuell eingeben',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Alternativ kannst du die JSON-Daten direkt eingeben',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    SizedBox(height: 8),
+                    Text(
+                      'JSON-Daten direkt eingeben',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: 24),
 
-                  Expanded(
-                    child: Container(
+                    SizedBox(height: 24),
+
+                    // JSON Input
+                    Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: Color(0xFFE30613).withOpacity(0.2),
-                          width: 2,
+                          color:
+                              _hasText ? Color(0xFF111827) : Color(0xFFE5E7EB),
+                          width: _hasText ? 2 : 1,
                         ),
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 15,
-                            offset: Offset(0, 5),
-                          ),
+                          if (_hasText)
+                            BoxShadow(
+                              color: Color(0xFF111827).withOpacity(0.1),
+                              blurRadius: 20,
+                              offset: Offset(0, 8),
+                            ),
                         ],
                       ),
                       child: Column(
                         children: [
-                          // Clipboard paste button
+                          // Header
                           Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(12),
+                            padding: EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: Color(0xFFE30613).withOpacity(0.05),
+                              color: Color(0xFFFAFAFA),
                               borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(14),
-                                topRight: Radius.circular(14),
+                                topLeft: Radius.circular(15),
+                                topRight: Radius.circular(15),
                               ),
                             ),
                             child: Row(
                               children: [
-                                Icon(
-                                  Icons.content_paste,
-                                  size: 16,
-                                  color: Color(0xFFE30613),
-                                ),
-                                SizedBox(width: 8),
                                 Text(
-                                  'JSON-Daten:',
+                                  'JSON',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFFE30613),
+                                    color: Color(0xFF111827),
+                                    letterSpacing: 1,
                                   ),
                                 ),
                                 Spacer(),
-                                InkWell(
+                                GestureDetector(
                                   onTap: _pasteFromClipboard,
-                                  borderRadius: BorderRadius.circular(6),
                                   child: Container(
                                     padding: EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: Color(0xFFE30613),
-                                      borderRadius: BorderRadius.circular(6),
+                                      color: Color(0xFF111827),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -1024,11 +767,11 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                                           size: 14,
                                           color: Colors.white,
                                         ),
-                                        SizedBox(width: 4),
+                                        SizedBox(width: 6),
                                         Text(
                                           'Einfügen',
                                           style: TextStyle(
-                                            fontSize: 11,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                             color: Colors.white,
                                           ),
@@ -1040,131 +783,342 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                               ],
                             ),
                           ),
-                          // Text input field
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.all(16),
-                              child: TextField(
-                                controller: _jsonController,
-                                maxLines: null,
-                                expands: true,
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  hintText:
-                                      '{\n  "type": "MonthJournalData",\n  "data": {\n    "columns": {\n      ...\n    }\n  }\n}',
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 13,
-                                    fontFamily: 'Courier',
-                                  ),
-                                ),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontFamily: 'Courier',
-                                  height: 1.4,
-                                ),
-                                textAlignVertical: TextAlignVertical.top,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
 
-                  if (_errorMessage != null) ...[
-                    SizedBox(height: 16),
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFE30613).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: Color(0xFFE30613).withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.error_outline, color: Color(0xFFE30613)),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
+                          // Text Input
+                          Container(
+                            height: 300,
+                            padding: EdgeInsets.all(20),
+                            child: TextField(
+                              controller: _jsonController,
+                              maxLines: null,
+                              expands: true,
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                hintText:
+                                    '{\n  "type": "MonthJournalData",\n  "data": {\n    ...\n  }\n}',
+                                hintStyle: TextStyle(
+                                  color: Color(0xFFD1D5DB),
+                                  fontSize: 14,
+                                  fontFamily: 'monospace',
+                                  height: 1.5,
+                                ),
+                              ),
                               style: TextStyle(
-                                color: Color(0xFFE30613),
-                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                                fontFamily: 'monospace',
+                                height: 1.5,
+                                color: Color(0xFF111827),
                               ),
+                              textAlignVertical: TextAlignVertical.top,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
 
-                  SizedBox(height: 24),
-                  Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: _hasText
-                          ? [
-                              BoxShadow(
-                                color: Color(0xFFE30613).withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: Offset(0, 6),
+                    if (_errorMessage != null) ...[
+                      SizedBox(height: 16),
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Color(0xFFDC2626).withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: Color(0xFFDC2626),
+                              size: 18,
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ]
-                          : [],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    SizedBox(height: 32),
+
+                    // Action Button
+                    Container(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _hasText ? _parseAndNavigate : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              _hasText ? Color(0xFF111827) : Color(0xFFE5E7EB),
+                          foregroundColor: Colors.white,
+                          elevation: _hasText ? 8 : 0,
+                          shadowColor: _hasText
+                              ? Color(0xFF111827).withOpacity(0.3)
+                              : null,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Dienstplan anzeigen',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: _hasText ? Colors.white : Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      ),
                     ),
-                    child: ElevatedButton(
-                      onPressed: _hasText ? _parseAndNavigate : null,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.flight_takeoff, size: 20),
-                          SizedBox(width: 12),
-                          Text(
-                            'Dienstplan anzeigen',
+
+                    if (_hasText) ...[
+                      SizedBox(height: 16),
+                      Center(
+                        child: TextButton(
+                          onPressed: _clearSavedData,
+                          child: Text(
+                            'Eingabe löschen',
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
+                              color: Color(0xFF6B7280),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _hasText ? Color(0xFFE30613) : Colors.grey[300],
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                    ),
-                  ),
+                    ],
 
-                  // Clear data button
-                  if (_hasText) ...[
-                    SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _clearSavedData,
-                      child: Text(
-                        'Gespeicherte Daten löschen',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
+                    SizedBox(height: 40),
                   ],
-
-                  SizedBox(height: 20),
-                ],
+                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildApiTokenSection() {
+    final hasToken = _currentApiToken != null && _currentApiToken!.isNotEmpty;
+
+    return Container(
+      padding: EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasToken ? Color(0xFF059669) : Color(0xFFE5E7EB),
+          width: hasToken ? 2 : 1,
+        ),
+        boxShadow: [
+          if (hasToken)
+            BoxShadow(
+              color: Color(0xFF059669).withOpacity(0.1),
+              blurRadius: 20,
+              offset: Offset(0, 8),
+            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: hasToken ? Color(0xFF059669) : Color(0xFFD1D5DB),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                hasToken ? 'API-Token aktiv' : 'API-Token',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              Spacer(),
+              if (hasToken)
+                Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF059669),
+                  size: 20,
+                ),
+            ],
+          ),
+          SizedBox(height: 16),
+          if (hasToken) ...[
+            // Active token display
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Aktueller Token:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF059669),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '${_currentApiToken!.substring(0, 8)}${'•' * 12}${_currentApiToken!.substring(_currentApiToken!.length - 4)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                      color: Color(0xFF374151),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 20),
+
+            // Token actions
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _refreshFromAPI,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF111827),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _isLoading
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Text(
+                              'Daten laden',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Container(
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: () => _showTokenDialog(isEdit: true),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Color(0xFFE5E7EB)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Bearbeiten',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                Container(
+                  height: 48,
+                  width: 48,
+                  child: IconButton(
+                    onPressed: _showRemoveTokenDialog,
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Color(0xFFDC2626),
+                      size: 20,
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Color(0xFFFEF2F2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            // No token state
+            Text(
+              'Automatische Dienstplan-Updates aktivieren',
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF6B7280),
+                height: 1.5,
+              ),
+            ),
+
+            SizedBox(height: 20),
+
+            Container(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => _showTokenDialog(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF111827),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Token eingeben',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

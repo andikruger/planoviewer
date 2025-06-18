@@ -25,27 +25,57 @@ class RosterDisplayScreen extends StatefulWidget {
 class _RosterDisplayScreenState extends State<RosterDisplayScreen>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
+  late AnimationController _headerController;
+  late Animation<double> _fadeAnimation;
   late Animation<double> _slideAnimation;
+  late Animation<double> _headerAnimation;
+  bool _isExporting = false;
 
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
+      duration: Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    _headerController = AnimationController(
       duration: Duration(milliseconds: 800),
       vsync: this,
     );
-    _slideAnimation = Tween<double>(begin: 30.0, end: 0.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
-    _animationController.forward();
 
-    // Debug: Print date range information
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
+    );
+
+    _slideAnimation = Tween<double>(begin: 40.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(0.2, 0.8, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _headerAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _headerController,
+        curve: Curves.easeOutQuart,
+      ),
+    );
+
+    _animationController.forward();
+    _headerController.forward();
+
     _debugPrintDateInfo();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _headerController.dispose();
     super.dispose();
   }
 
@@ -59,13 +89,45 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
     print('Should show filtered view: ${DateTime.now().day < 15}');
   }
 
-void _exportRosterToPDF() async {
-  final pdfService = PDFExportService(
-    startDate: widget.startDate,
-    endDate: widget.endDate,
-  );
-  await pdfService.exportRosterToPDF(context, widget.rosterData);
-}
+  void _exportRosterToPDF() async {
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final pdfService = PDFExportService(
+        startDate: widget.startDate,
+        endDate: widget.endDate,
+      );
+      await pdfService.exportRosterToPDF(context, widget.rosterData);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✓ PDF exportiert'),
+          backgroundColor: Color(0xFF111827),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Export'),
+          backgroundColor: Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isExporting = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,234 +138,380 @@ void _exportRosterToPDF() async {
     print('All days: ${allDays.length}, Visible days: ${visibleDays.length}');
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE30613),
-              Colors.white,
-            ],
-            stops: [0.0, 0.3],
-          ),
+      backgroundColor: Color(0xFFFAFAFA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Modern Header
+            _buildHeader(headerText),
+
+            // Stats Overview
+            _buildStatsOverview(visibleDays),
+
+            // Days List
+            _buildDaysList(visibleDays),
+          ],
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header with Austrian Airlines branding
-              Container(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Row(
+      ),
+    );
+  }
+
+  Widget _buildHeader(String headerText) {
+    return FadeTransition(
+      opacity: _headerAnimation,
+      child: Container(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          children: [
+            // Navigation and actions
+            Row(
+              children: [
+                // Back button
+                Container(
+                  width: 44,
+                  height: 44,
+                  child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.arrow_back_ios_new,
+                      color: Color(0xFF111827),
+                      size: 20,
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Title section
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
                       children: [
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: Icon(Icons.arrow_back_ios, color: Colors.white),
-                        ),
-                        Expanded(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.flight, color: Colors.white, size: 24),
-                              SizedBox(width: 8),
-                              Text(
-                                headerText,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 1,
-                                ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 4,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: Color(0xFFE30613),
+                                borderRadius: BorderRadius.circular(2),
                               ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.push(
-                            context,
-                            PageRouteBuilder(
-                              pageBuilder:
-                                  (context, animation, secondaryAnimation) =>
-                                      CalendarScreen(
-                                rosterData: widget.rosterData,
-                                startDate: widget.startDate,
-                                endDate: widget.endDate,
-                              ),
-                              transitionsBuilder: (context, animation,
-                                  secondaryAnimation, child) {
-                                return SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(1.0, 0.0),
-                                    end: Offset.zero,
-                                  ).animate(CurvedAnimation(
-                                    parent: animation,
-                                    curve: Curves.easeInOutCubic,
-                                  )),
-                                  child: child,
-                                );
-                              },
                             ),
-                          ),
-                          icon: Icon(Icons.calendar_view_month,
-                              color: Colors.white),
-                          tooltip: 'Kalenderansicht',
-                        ),
-                        IconButton(
-                          onPressed: _exportRosterToPDF,
-                          icon: Icon(Icons.file_download, color: Colors.white),
-                          tooltip: 'Export PDF',
+                            SizedBox(width: 12),
+                            Text(
+                              headerText,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    SizedBox(height: 12),
+                  ),
+                ),
+
+                // Action buttons
+                Row(
+                  children: [
+                    // Calendar view
                     Container(
-                      height: 2,
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(1),
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          PageRouteBuilder(
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    CalendarScreen(
+                              rosterData: widget.rosterData,
+                              startDate: widget.startDate,
+                              endDate: widget.endDate,
+                            ),
+                            transitionsBuilder: (context, animation,
+                                secondaryAnimation, child) {
+                              return SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(1.0, 0.0),
+                                  end: Offset.zero,
+                                ).animate(CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeInOutCubic,
+                                )),
+                                child: child,
+                              );
+                            },
+                          ),
+                        ),
+                        icon: Icon(
+                          Icons.calendar_view_month,
+                          color: Color(0xFF111827),
+                          size: 20,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(width: 8),
+
+                    // Export PDF
+                    Container(
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        onPressed: _isExporting ? null : _exportRosterToPDF,
+                        icon: _isExporting
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF111827)),
+                                ),
+                              )
+                            : Icon(
+                                Icons.file_download_outlined,
+                                color: Color(0xFF111827),
+                                size: 20,
+                              ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-              // Summary cards
-              AnimatedBuilder(
-                animation: _slideAnimation,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(0, _slideAnimation.value),
-                    child: Container(
-                      margin: EdgeInsets.symmetric(horizontal: 20),
-                      padding: EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Color(0xFFE30613).withOpacity(0.1),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 20,
-                            offset: Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildSummaryItem(
-                              Icons.calendar_month,
-                              'Tage Gesamt',
-                              '${visibleDays.length}',
-                              Color(0xFFE30613),
-                            ),
-                          ),
-                          Container(
-                            width: 1,
-                            height: 50,
-                            color: Colors.grey[200],
-                          ),
-                          Expanded(
-                            child: _buildSummaryItem(
-                              Icons.work,
-                              'Arbeitstage',
-                              '${visibleDays.where((d) => d.hasWork).length}',
-                              Color(0xFF2E7D32),
-                            ),
-                          ),
-                          Container(
-                            width: 1,
-                            height: 50,
-                            color: Colors.grey[200],
-                          ),
-                          Expanded(
-                            child: _buildSummaryItem(
-                              Icons.schedule,
-                              'Stunden Gesamt',
-                              '${_calculateTotalHours(visibleDays)}h',
-                              Color(0xFFFF8F00),
-                            ),
-                          ),
-                        ],
-                      ),
+  Widget _buildStatsOverview(List<WorkDay> visibleDays) {
+    return AnimatedBuilder(
+      animation: _slideAnimation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _slideAnimation.value),
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: 24),
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 20,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildStatItem(
+                      '${visibleDays.length}',
+                      'Tage',
+                      Color(0xFF6366F1),
+                      Icons.calendar_month,
                     ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      '${visibleDays.where((d) => d.hasWork).length}',
+                      'Arbeitstage',
+                      Color(0xFF059669),
+                      Icons.work_outline,
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: Color(0xFFE5E7EB),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      '${_calculateTotalHours(visibleDays)}h',
+                      'Stunden',
+                      Color(0xFFF59E0B),
+                      Icons.schedule,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatItem(
+      String value, String label, Color color, IconData icon) {
+    return Column(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: color,
+          ),
+        ),
+        SizedBox(height: 12),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111827),
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDaysList(List<WorkDay> visibleDays) {
+    return Expanded(
+      child: Container(
+        margin: EdgeInsets.only(top: 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+
+            // Days header
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    'SCHICHTEN',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  Spacer(),
+                  Text(
+                    '${visibleDays.length} Tage',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Days list
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                itemCount: visibleDays.length,
+                itemBuilder: (context, index) {
+                  return AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      final delay = index * 0.05;
+                      final animationValue = Tween<double>(
+                        begin: 0.0,
+                        end: 1.0,
+                      )
+                          .animate(
+                            CurvedAnimation(
+                              parent: _animationController,
+                              curve: Interval(
+                                delay.clamp(0.0, 0.7),
+                                (delay + 0.3).clamp(0.3, 1.0),
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                          )
+                          .value;
+
+                      return Transform.translate(
+                        offset: Offset(30 * (1 - animationValue), 0),
+                        child: Opacity(
+                          opacity: animationValue,
+                          child: Container(
+                            margin: EdgeInsets.only(bottom: 12),
+                            child: DayCard(
+                              day: visibleDays[index],
+                              dayNumber: _getDayNumber(index),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
-
-              SizedBox(height: 20),
-
-              // Days list
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(24),
-                      topRight: Radius.circular(24),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: visibleDays.length,
-                          itemBuilder: (context, index) {
-                            return AnimatedBuilder(
-                              animation: _animationController,
-                              builder: (context, child) {
-                                final delay = index * 0.03;
-                                final animationValue = Tween<double>(
-                                  begin: 0.0,
-                                  end: 1.0,
-                                )
-                                    .animate(
-                                      CurvedAnimation(
-                                        parent: _animationController,
-                                        curve: Interval(delay, 1.0,
-                                            curve: Curves.easeOutCubic),
-                                      ),
-                                    )
-                                    .value;
-
-                                return Transform.translate(
-                                  offset: Offset(30 * (1 - animationValue), 0),
-                                  child: Opacity(
-                                    opacity: animationValue,
-                                    child: DayCard(
-                                        day: visibleDays[index],
-                                        dayNumber: _getDayNumber(index)),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -395,44 +603,5 @@ void _exportRosterToPDF() async {
         'Visible index $visibleIndex -> actual index $actualIndex -> day ${dayDate.day} of ${dayDate.month}/${dayDate.year}');
 
     return dayDate.day;
-  }
-
-  Widget _buildSummaryItem(
-      IconData icon, String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: color,
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    );
   }
 }

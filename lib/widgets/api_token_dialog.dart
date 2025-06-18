@@ -26,7 +26,10 @@ class _TokenInputDialogState extends State<TokenInputDialog>
   final TextEditingController _tokenController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   late AnimationController _animationController;
+  late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _pulseAnimation;
   bool _isTokenVisible = false;
   bool _isLoading = false;
   String? _errorMessage;
@@ -41,16 +44,40 @@ class _TokenInputDialogState extends State<TokenInputDialog>
     }
 
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 300),
+      duration: Duration(milliseconds: 800),
       vsync: this,
     );
+
+    _pulseController = AnimationController(
+      duration: Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.elasticOut,
+      ),
     );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutQuart,
+      ),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
     _animationController.forward();
 
-    // Auto-focus the text field after a short delay
-    Future.delayed(Duration(milliseconds: 500), () {
+    // Auto-focus the text field after animation
+    Future.delayed(Duration(milliseconds: 600), () {
       if (mounted) {
         _focusNode.requestFocus();
       }
@@ -62,6 +89,7 @@ class _TokenInputDialogState extends State<TokenInputDialog>
     _tokenController.dispose();
     _focusNode.dispose();
     _animationController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -76,7 +104,7 @@ class _TokenInputDialogState extends State<TokenInputDialog>
     // Basic validation
     if (token.isEmpty) {
       setState(() {
-        _errorMessage = 'Bitte gib einen API-Token ein';
+        _errorMessage = 'Token erforderlich';
         _isLoading = false;
       });
       return;
@@ -84,7 +112,7 @@ class _TokenInputDialogState extends State<TokenInputDialog>
 
     if (token.length < 10) {
       setState(() {
-        _errorMessage = 'Der API-Token scheint zu kurz zu sein';
+        _errorMessage = 'Token zu kurz';
         _isLoading = false;
       });
       return;
@@ -95,8 +123,8 @@ class _TokenInputDialogState extends State<TokenInputDialog>
       widget.onTokenSubmitted!();
     }
 
-    // Simulate API validation (you can replace this with actual API call)
-    Future.delayed(Duration(seconds: 1), () {
+    // Simulate validation
+    Future.delayed(Duration(milliseconds: 800), () {
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -114,12 +142,28 @@ class _TokenInputDialogState extends State<TokenInputDialog>
         setState(() {
           _errorMessage = null;
         });
+
+        // Brief feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Eingefügt'),
+            backgroundColor: Color(0xFF111827),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            margin: EdgeInsets.all(16),
+            duration: Duration(seconds: 1),
+          ),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fehler beim Einfügen aus der Zwischenablage'),
-          backgroundColor: Colors.red[600],
+          content: Text('Fehler beim Einfügen'),
+          backgroundColor: Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          margin: EdgeInsets.all(16),
         ),
       );
     }
@@ -129,76 +173,84 @@ class _TokenInputDialogState extends State<TokenInputDialog>
   Widget build(BuildContext context) {
     return ScaleTransition(
       scale: _scaleAnimation,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        contentPadding: EdgeInsets.zero,
-        content: Container(
-          width: MediaQuery.of(context).size.width * 0.9,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFFE30613),
-                Colors.white,
-              ],
-              stops: [0.0, 0.3],
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: 400,
+              minWidth: 300,
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildTokenDialogHeader(),
-              _buildTokenDialogContent(),
-            ],
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 40,
+                  offset: Offset(0, 20),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildHeader(),
+                _buildContent(),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTokenDialogHeader() {
+  Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.all(24),
+      padding: EdgeInsets.all(32),
       child: Column(
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(40),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.key,
-              size: 40,
-              color: Color(0xFFE30613),
+          // Icon
+          ScaleTransition(
+            scale: _isLoading ? _pulseAnimation : _scaleAnimation,
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Color(0xFF111827),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.key,
+                size: 32,
+                color: Colors.white,
+              ),
             ),
           ),
-          SizedBox(height: 16),
+
+          SizedBox(height: 24),
+
+          // Title
           Text(
             widget.title,
             style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
             ),
             textAlign: TextAlign.center,
           ),
+
           SizedBox(height: 8),
+
+          // Subtitle
           Text(
             widget.subtitle,
             style: TextStyle(
-              fontSize: 16,
-              color: Colors.white.withOpacity(0.9),
+              fontSize: 14,
+              color: Color(0xFF6B7280),
+              height: 1.4,
             ),
             textAlign: TextAlign.center,
           ),
@@ -207,98 +259,161 @@ class _TokenInputDialogState extends State<TokenInputDialog>
     );
   }
 
-  Widget _buildTokenDialogContent() {
+  Widget _buildContent() {
     return Container(
-      padding: EdgeInsets.all(24),
+      padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Token input section
           Text(
-            'API-Token',
+            'TOKEN',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
+              letterSpacing: 1.5,
             ),
           ),
-          SizedBox(height: 8),
 
-          // Token input field
+          SizedBox(height: 12),
+
+          // Input container
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _errorMessage != null
-                    ? Colors.red[400]!
-                    : Colors.grey[300]!,
-                width: 2,
+                    ? Color(0xFFDC2626)
+                    : _tokenController.text.isNotEmpty
+                        ? Color(0xFF111827)
+                        : Color(0xFFE5E7EB),
+                width: _tokenController.text.isNotEmpty ? 2 : 1,
               ),
-              color: Colors.grey[50],
+              color: Color(0xFFFAFAFA),
             ),
-            child: TextField(
-              controller: _tokenController,
-              focusNode: _focusNode,
-              obscureText: !_isTokenVisible,
-              onSubmitted: (_) => _validateAndSubmit(),
-              decoration: InputDecoration(
-                hintText: 'eyJhb-xxxxxxxxxxxxxxxxxxxxxxxx',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(16),
-                suffixIcon: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: _pasteFromClipboard,
-                      icon: Icon(Icons.paste, color: Colors.grey[600]),
-                      tooltip: 'Aus Zwischenablage einfügen',
+            child: Column(
+              children: [
+                // Input field
+                TextField(
+                  controller: _tokenController,
+                  focusNode: _focusNode,
+                  obscureText: !_isTokenVisible,
+                  onSubmitted: (_) => _validateAndSubmit(),
+                  onChanged: (_) => setState(() => _errorMessage = null),
+                  decoration: InputDecoration(
+                    hintText: 'eyJhbG...',
+                    hintStyle: TextStyle(
+                      color: Color(0xFFD1D5DB),
+                      fontFamily: 'monospace',
                     ),
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _isTokenVisible = !_isTokenVisible;
-                        });
-                      },
-                      icon: Icon(
-                        _isTokenVisible
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                        color: Colors.grey[600],
-                      ),
-                      tooltip: _isTokenVisible
-                          ? 'Token verbergen'
-                          : 'Token anzeigen',
-                    ),
-                  ],
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.all(16),
+                  ),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontFamily: 'monospace',
+                    color: Color(0xFF111827),
+                    height: 1.4,
+                  ),
                 ),
-              ),
-              style: TextStyle(
-                fontSize: 14,
-                fontFamily: 'monospace',
-              ),
+
+                // Action bar
+                Container(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    children: [
+                      Text(
+                        'API-Token',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF9CA3AF),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Spacer(),
+                      // Paste button
+                      GestureDetector(
+                        onTap: _pasteFromClipboard,
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF111827),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.content_paste,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Einfügen',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      // Visibility toggle
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _isTokenVisible = !_isTokenVisible),
+                        child: Container(
+                          padding: EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE5E7EB),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            _isTokenVisible
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            size: 16,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
 
           // Error message
           if (_errorMessage != null) ...[
-            SizedBox(height: 8),
+            SizedBox(height: 12),
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red[50],
+                color: Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red[200]!),
+                border: Border.all(color: Color(0xFFDC2626).withOpacity(0.2)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                  Icon(
+                    Icons.error_outline,
+                    color: Color(0xFFDC2626),
+                    size: 16,
+                  ),
                   SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: Colors.red[700],
-                        fontSize: 14,
-                      ),
+                  Text(
+                    _errorMessage!,
+                    style: TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -308,104 +423,131 @@ class _TokenInputDialogState extends State<TokenInputDialog>
 
           SizedBox(height: 24),
 
-          // Help text
+          // Help section
           Container(
-            padding: EdgeInsets.all(12),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[200]!),
+              color: Color(0xFFF0F4FF),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Wo finde ich meinen API-Token?',
-                        style: TextStyle(
-                          color: Colors.blue[800],
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
+                Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF6366F1),
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Im Authorization-Header des API-Requests, in der Form "Bearer <API-Token>".',
-                        style: TextStyle(
-                          color: Colors.blue[700],
-                          fontSize: 12,
-                        ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Token-Hilfe',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF4F46E5),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Der Token befindet sich im Authorization-Header als "Bearer <token>"',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF374151),
+                    height: 1.4,
                   ),
                 ),
               ],
             ),
           ),
 
-          SizedBox(height: 24),
+          SizedBox(height: 32),
 
-          // Submit button
-          ElevatedButton(
-            onPressed: _isLoading ? null : _validateAndSubmit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFFE30613),
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-            child: _isLoading
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
+          // Action buttons
+          Row(
+            children: [
+              // Cancel button
+              Expanded(
+                child: Container(
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed:
+                        _isLoading ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Color(0xFFE5E7EB)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      SizedBox(width: 12),
-                      Text(
-                        'Überprüfung...',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                    child: Text(
+                      'Abbrechen',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
                       ),
-                    ],
-                  )
-                : Text(
-                    'Token bestätigen',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
-          ),
-
-          SizedBox(height: 12),
-
-          // Cancel button
-          TextButton(
-            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-            child: Text(
-              'Abbrechen',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
+                ),
               ),
-            ),
+
+              SizedBox(width: 12),
+
+              // Submit button
+              Expanded(
+                flex: 2,
+                child: Container(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _validateAndSubmit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF111827),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Überprüfe...',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            'Bestätigen',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

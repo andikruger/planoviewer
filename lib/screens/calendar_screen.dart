@@ -24,20 +24,47 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
+  late AnimationController _selectionController;
   late Animation<double> _fadeAnimation;
-  int? selectedDay;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _selectionAnimation;
   DateTime? selectedDate;
 
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1000),
       vsync: this,
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+
+    _selectionController = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this,
     );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutQuart,
+      ),
+    );
+
+    _slideAnimation = Tween<double>(begin: 30.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(0.2, 0.8, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _selectionAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _selectionController,
+        curve: Curves.elasticOut,
+      ),
+    );
+
     _animationController.forward();
 
     print('=== CALENDAR DEBUG INFO ===');
@@ -50,6 +77,7 @@ class _CalendarScreenState extends State<CalendarScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _selectionController.dispose();
     super.dispose();
   }
 
@@ -57,217 +85,298 @@ class _CalendarScreenState extends State<CalendarScreen>
   Widget build(BuildContext context) {
     final allDays = widget.rosterData.getDays();
     final visibleDays = _getVisibleDays(allDays);
-    final workingDays = visibleDays.where((d) => d.hasWork).length;
-    final totalHours = _calculateTotalHours(visibleDays);
     final headerText = _getHeaderText();
 
     print('All days: ${allDays.length}, Visible days: ${visibleDays.length}');
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE30613),
-              Colors.white,
+      backgroundColor: Color(0xFFFAFAFA),
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Column(
+            children: [
+              // Modern Header
+              _buildHeader(headerText),
+
+              // Stats Overview
+              _buildStatsOverview(visibleDays),
+
+              // Calendar
+              _buildCalendarSection(visibleDays),
             ],
-            stops: [0.0, 0.25],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon:
-                                Icon(Icons.arrow_back_ios, color: Colors.white),
-                          ),
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.calendar_month,
-                                    color: Colors.white, size: 24),
-                                SizedBox(width: 8),
-                                Text(
-                                  headerText,
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const ShiftCalendarScreen(),
-                              ),
-                            ),
-                            icon:
-                                Icon(Icons.calendar_month, color: Colors.white),
-                            tooltip: 'Wunsch eintragen',
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12),
-                      Container(
-                        height: 2,
-                        width: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(1),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Quick Stats
-                Container(
-                  margin: EdgeInsets.symmetric(horizontal: 20),
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 20,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildQuickStat(
-                          'Arbeitstage', '$workingDays', Color(0xFFE30613)),
-                      _buildQuickStat(
-                          'Freie Tage',
-                          '${visibleDays.length - workingDays}',
-                          Color(0xFF2E7D32)),
-                      _buildQuickStat(
-                          'Stunden', '${totalHours}h', Color(0xFFFF8F00)),
-                    ],
-                  ),
-                ),
-
-                SizedBox(height: 20),
-
-                // Calendar Container
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(24),
-                        topRight: Radius.circular(24),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-
-                        // Calendar Header
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 20),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
-                                .map((day) => Container(
-                                      width: 40,
-                                      child: Text(
-                                        day,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: (day == 'Sa' || day == 'So')
-                                              ? Color(0xFFFF8F00)
-                                              : Colors.grey[700],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ))
-                                .toList(),
-                          ),
-                        ),
-
-                        SizedBox(height: 16),
-
-                        // Calendar Grid - FIXED VERSION
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 20),
-                            child: _buildDynamicCalendarGrid(visibleDays),
-                          ),
-                        ),
-
-                        // Selected Day Details
-                        if (selectedDate != null) _buildSelectedDayDetails(),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
     );
   }
 
-  /// Filter days based on roster release schedule
-  List<WorkDay> _getVisibleDays(List<WorkDay> allDays) {
-    final now = DateTime.now();
+  Widget _buildHeader(String headerText) {
+    return Container(
+      padding: EdgeInsets.all(24),
+      child: Row(
+        children: [
+          // Back button
+          Container(
+            width: 44,
+            height: 44,
+            child: IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: Icon(
+                Icons.arrow_back_ios_new,
+                color: Color(0xFF111827),
+                size: 20,
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
 
-    if (now.day < 15) {
-      // Before 15th: Show only current month
-      final currentMonthDays = <WorkDay>[];
+          // Title section
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 4,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFE30613),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    headerText,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
 
-      for (int i = 0; i < allDays.length; i++) {
-        final dayDate = widget.startDate.add(Duration(days: i));
-        if (dayDate.month == now.month && dayDate.year == now.year) {
-          currentMonthDays.add(allDays[i]);
-        }
-      }
-
-      print('Filtering to current month only: ${currentMonthDays.length} days');
-      return currentMonthDays;
-    } else {
-      // 15th and after: Show all days (current + next month)
-      print('Showing all days: ${allDays.length} days');
-      return allDays;
-    }
+          // Wish calendar button
+          Container(
+            width: 44,
+            height: 44,
+            child: IconButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ShiftCalendarScreen(),
+                ),
+              ),
+              icon: Icon(
+                Icons.edit_calendar,
+                color: Color(0xFF111827),
+                size: 20,
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  /// Build dynamic calendar grid that works with actual date range
+  Widget _buildStatsOverview(List<WorkDay> visibleDays) {
+    final workingDays = visibleDays.where((d) => d.hasWork).length;
+    final totalHours = _calculateTotalHours(visibleDays);
+
+    return AnimatedBuilder(
+      animation: _slideAnimation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _slideAnimation.value),
+          child: Container(
+            margin: EdgeInsets.symmetric(horizontal: 24),
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    '$workingDays',
+                    'Arbeitstage',
+                    Color(0xFF059669),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: Color(0xFFE5E7EB),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    '${visibleDays.length - workingDays}',
+                    'Freie Tage',
+                    Color(0xFF6366F1),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: Color(0xFFE5E7EB),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    '${totalHours}h',
+                    'Stunden',
+                    Color(0xFFF59E0B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatItem(String value, String label, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarSection(List<WorkDay> visibleDays) {
+    return Expanded(
+      child: Container(
+        margin: EdgeInsets.only(top: 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+
+            // Calendar header
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Row(
+                children: [
+                  Text(
+                    'KALENDER',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  Spacer(),
+                  Text(
+                    '${visibleDays.length} Tage',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Weekday headers
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+                    .map((day) => Expanded(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              day,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: (day == 'Sa' || day == 'So')
+                                    ? Color(0xFFF59E0B)
+                                    : Color(0xFF6B7280),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+
+            // Calendar grid
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: _buildDynamicCalendarGrid(visibleDays),
+              ),
+            ),
+
+            // Selected day details
+            if (selectedDate != null) _buildSelectedDayDetails(visibleDays),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDynamicCalendarGrid(List<WorkDay> days) {
     final startDate = widget.startDate;
     final endDate =
@@ -285,7 +394,6 @@ class _CalendarScreenState extends State<CalendarScreen>
     print('Start: $startDate, End: $endDate');
     print('Calendar start: $calendarStart');
 
-    // Build the calendar with month dividers
     return _buildCalendarWithDividers(
         calendarStart, startDate, endDate, days, weeksNeeded);
   }
@@ -316,7 +424,6 @@ class _CalendarScreenState extends State<CalendarScreen>
 
       // Check if this week starts a new month
       bool shouldShowDivider = false;
-      DateTime weekStartDate = calendarStart.add(Duration(days: week * 7));
 
       // Look for the first day of this week that's in our date range
       for (int day = 0; day < 7; day++) {
@@ -338,7 +445,6 @@ class _CalendarScreenState extends State<CalendarScreen>
 
       // Add month divider if needed
       if (shouldShowDivider) {
-        // Find the new month name
         for (int day = 0; day < 7; day++) {
           final cellDate = calendarStart.add(Duration(days: week * 7 + day));
           final isInRange =
@@ -363,16 +469,14 @@ class _CalendarScreenState extends State<CalendarScreen>
         if (!isInRange) {
           // Empty cell for dates outside our range
           weekCells.add(Container(
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-            ),
+            height: 56,
             child: Center(
               child: Text(
                 '${cellDate.day}',
                 style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[300],
+                  fontSize: 14,
+                  color: Color(0xFFE5E7EB),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -385,7 +489,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         final dayData = dayIndex < days.length ? days[dayIndex] : null;
 
         if (dayData == null) {
-          weekCells.add(Container(height: 60)); // No data for this day
+          weekCells.add(Container(height: 56)); // No data for this day
           continue;
         }
 
@@ -395,109 +499,13 @@ class _CalendarScreenState extends State<CalendarScreen>
             selectedDate!.month == cellDate.month &&
             selectedDate!.day == cellDate.day;
 
-        weekCells.add(GestureDetector(
-          onTap: () {
-            setState(() {
-              if (isSelected) {
-                selectedDate = null;
-              } else {
-                selectedDate = cellDate;
-              }
-            });
-          },
-          child: AnimatedContainer(
-            duration: Duration(milliseconds: 200),
-            height: 60,
-            decoration: BoxDecoration(
-              color: _getDayBackgroundColor(dayData, isWeekend, isSelected),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _getDayBorderColor(dayData, isWeekend, isSelected),
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: Color(0xFFE30613).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${cellDate.day}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: _getDayTextColor(dayData, isWeekend, isSelected),
-                  ),
-                ),
-                SizedBox(height: 2),
-                if (dayData.hasWork && dayData.shifts.isNotEmpty) ...[
-                  Text(
-                    _getShiftStartTime(dayData.shifts.first.interval),
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFE30613),
-                    ),
-                  ),
-                  Container(
-                    width: 10,
-                    height: 1,
-                    color: Color(0xFFE30613),
-                    margin: EdgeInsets.symmetric(vertical: 1),
-                  ),
-                  Text(
-                    _getShiftEndTime(dayData.shifts.first.interval),
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFE30613),
-                    ),
-                  ),
-                ] else if (dayData.hasWork &&
-                    dayData.hoursWorked != '0:00') ...[
-                  Text(
-                    '${dayData.hoursWorked.split(':')[0]}h',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFE30613),
-                    ),
-                  ),
-                ] else if (isWeekend) ...[
-                  Container(
-                    width: 12,
-                    height: 2,
-                    decoration: BoxDecoration(
-                      color: Color(0xFFFF8F00),
-                      borderRadius: BorderRadius.circular(1),
-                    ),
-                  ),
-                ] else ...[
-                  Text(
-                    'FREI',
-                    style: TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ));
+        weekCells
+            .add(_buildCalendarDay(cellDate, dayData, isWeekend, isSelected));
       }
 
       // Add the week row
       calendarRows.add(Container(
-        margin: EdgeInsets.only(bottom: 4),
+        margin: EdgeInsets.only(bottom: 8),
         child: Row(
           children: weekCells
               .map((cell) => Expanded(
@@ -517,70 +525,118 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
+  Widget _buildCalendarDay(
+      DateTime cellDate, WorkDay dayData, bool isWeekend, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            selectedDate = null;
+            _selectionController.reverse();
+          } else {
+            selectedDate = cellDate;
+            _selectionController.forward();
+          }
+        });
+      },
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
+        height: 56,
+        decoration: BoxDecoration(
+          color: _getDayBackgroundColor(dayData, isWeekend, isSelected),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _getDayBorderColor(dayData, isWeekend, isSelected),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '${cellDate.day}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _getDayTextColor(dayData, isWeekend, isSelected),
+              ),
+            ),
+            SizedBox(height: 2),
+            if (dayData.hasWork && dayData.shifts.isNotEmpty) ...[
+              Container(
+                width: 16,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Color(0xFFE30613),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ] else if (dayData.hasWork && dayData.hoursWorked != '0:00') ...[
+              Container(
+                width: 12,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Color(0xFF059669),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ] else if (isWeekend) ...[
+              Container(
+                width: 8,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Color(0xFFF59E0B),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ] else ...[
+              Container(
+                width: 6,
+                height: 1,
+                decoration: BoxDecoration(
+                  color: Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMonthDivider(String monthName) {
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 12),
+      margin: EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
           Expanded(
             child: Container(
               height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Color(0xFFE30613).withOpacity(0.3),
-                  ],
-                ),
-              ),
+              color: Color(0xFFE5E7EB),
             ),
           ),
           Container(
             margin: EdgeInsets.symmetric(horizontal: 16),
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Color(0xFFE30613),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0xFFE30613).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
+              color: Color(0xFF111827),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  color: Colors.white,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  monthName.toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
+            child: Text(
+              monthName.toUpperCase(),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                letterSpacing: 1,
+              ),
             ),
           ),
           Expanded(
             child: Container(
               height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFE30613).withOpacity(0.3),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
+              color: Color(0xFFE5E7EB),
             ),
           ),
         ],
@@ -588,12 +644,11 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
-  Widget _buildSelectedDayDetails() {
+  Widget _buildSelectedDayDetails(List<WorkDay> visibleDays) {
     if (selectedDate == null) return Container();
 
     // Find the day data for selected date
     final dayIndex = selectedDate!.difference(widget.startDate).inDays;
-    final visibleDays = _getVisibleDays(widget.rosterData.getDays());
 
     if (dayIndex < 0 || dayIndex >= visibleDays.length) return Container();
 
@@ -616,141 +671,251 @@ class _CalendarScreenState extends State<CalendarScreen>
       'Dezember'
     ];
 
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      margin: EdgeInsets.all(20),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Color(0xFFE30613).withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0xFFE30613).withOpacity(0.1),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Color(0xFFE30613),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Text(
-                    '${selectedDate!.day}',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+    return AnimatedBuilder(
+      animation: _selectionAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _selectionAnimation.value,
+          child: Opacity(
+            opacity: _selectionAnimation.value,
+            child: Container(
+              margin: EdgeInsets.all(20),
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Color(0xFFFAFAFA),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Color(0xFF111827),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${selectedDate!.day}',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$dayName',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            Text(
+                              '${selectedDate!.day}. ${monthNames[selectedDate!.month]} ${selectedDate!.year}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF6B7280),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 32,
+                        height: 32,
+                        child: IconButton(
+                          onPressed: () {
+                            setState(() => selectedDate = null);
+                            _selectionController.reverse();
+                          },
+                          icon: Icon(
+                            Icons.close,
+                            color: Color(0xFF6B7280),
+                            size: 16,
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$dayName, ${selectedDate!.day}. ${monthNames[selectedDate!.month]}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isWeekend ? Color(0xFFFF8F00) : Colors.grey[800],
-                      ),
-                    ),
-                    if (day.hoursWorked != '0:00' && day.hoursWorked.isNotEmpty)
-                      Text(
-                        'Arbeitszeit: ${day.hoursWorked}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: () => setState(() => selectedDate = null),
-                icon: Icon(Icons.close, color: Colors.grey[500]),
-              ),
-            ],
-          ),
-          if (day.shifts.isNotEmpty) ...[
-            SizedBox(height: 12),
-            ...day.shifts
-                .map((shift) => Container(
-                      margin: EdgeInsets.only(bottom: 8),
-                      padding: EdgeInsets.all(10),
+
+                  // Content
+                  if (day.shifts.isNotEmpty) ...[
+                    SizedBox(height: 16),
+                    ...day.shifts
+                        .map((shift) => Container(
+                              margin: EdgeInsets.only(bottom: 8),
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _getShiftAccentColor(shift.name),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 4,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: _getShiftAccentColor(shift.name),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _getShiftDisplayName(shift.name),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF6B7280),
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          _formatShiftInterval(shift.interval),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF111827),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                  ] else if (!day.hasWork) ...[
+                    SizedBox(height: 16),
+                    Container(
+                      padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _getShiftColor(shift.name).withOpacity(0.1),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _getShiftColor(shift.name).withOpacity(0.3),
-                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            _getShiftIcon(shift.name),
-                            size: 16,
-                            color: _getShiftColor(shift.name),
+                          Container(
+                            padding: EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isWeekend
+                                  ? Color(0xFFF59E0B).withOpacity(0.1)
+                                  : Color(0xFFE5E7EB),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              isWeekend ? Icons.weekend : Icons.free_breakfast,
+                              size: 16,
+                              color: isWeekend
+                                  ? Color(0xFFF59E0B)
+                                  : Color(0xFF6B7280),
+                            ),
                           ),
-                          SizedBox(width: 8),
+                          SizedBox(width: 12),
                           Text(
-                            '${_getShiftDisplayName(shift.name)}: ${_formatShiftInterval(shift.interval)}',
+                            isWeekend ? 'Wochenende' : 'Freier Tag',
                             style: TextStyle(
                               fontSize: 14,
+                              color: Color(0xFF111827),
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey[800],
                             ),
                           ),
                         ],
                       ),
-                    ))
-                .toList(),
-          ] else if (!day.hasWork) ...[
-            SizedBox(height: 12),
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isWeekend ? Icons.weekend : Icons.free_breakfast,
-                    size: 16,
-                    color: Colors.grey[500],
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    isWeekend ? 'Wochenende' : 'Freier Tag',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
                     ),
-                  ),
+                  ],
+
+                  // Hours worked
+                  if (day.hoursWorked != '0:00' &&
+                      day.hoursWorked.isNotEmpty) ...[
+                    SizedBox(height: 12),
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Color(0xFF059669).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 12,
+                            color: Color(0xFF059669),
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Arbeitszeit: ${day.hoursWorked}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF059669),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          ],
-        ],
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  /// Filter days based on roster release schedule
+  List<WorkDay> _getVisibleDays(List<WorkDay> allDays) {
+    final now = DateTime.now();
+
+    if (now.day < 15) {
+      // Before 15th: Show only current month
+      final currentMonthDays = <WorkDay>[];
+
+      for (int i = 0; i < allDays.length; i++) {
+        final dayDate = widget.startDate.add(Duration(days: i));
+        if (dayDate.month == now.month && dayDate.year == now.year) {
+          currentMonthDays.add(allDays[i]);
+        }
+      }
+
+      print('Filtering to current month only: ${currentMonthDays.length} days');
+      return currentMonthDays;
+    } else {
+      // 15th and after: Show all days (current + next month)
+      print('Showing all days: ${allDays.length} days');
+      return allDays;
+    }
   }
 
   /// Get header text based on visible date range
@@ -854,44 +1019,6 @@ class _CalendarScreenState extends State<CalendarScreen>
     return timeString;
   }
 
-  Widget _buildQuickStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Helper methods
-  String _getShiftStartTime(String interval) {
-    final parts = interval.split('-');
-    return parts.isNotEmpty ? _convertTo24Hour(parts[0].trim()) : '';
-  }
-
-  String _getShiftEndTime(String interval) {
-    final parts = interval.split('-');
-    if (parts.length >= 2) {
-      return _convertTo24Hour(parts[1].replaceAll('+1', '').trim());
-    }
-    return '';
-  }
-
   String _getDayName(int weekday) {
     final days = [
       'Montag',
@@ -906,62 +1033,49 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   Color _getDayBackgroundColor(WorkDay day, bool isWeekend, bool isSelected) {
-    if (isSelected) return Color(0xFFE30613).withOpacity(0.1);
+    if (isSelected) return Color(0xFF111827).withOpacity(0.1);
     if (day.hasWork) return Colors.white;
-    if (isWeekend) return Color(0xFFFF8F00).withOpacity(0.1);
-    return Colors.grey[100]!;
+    if (isWeekend) return Color(0xFFF59E0B).withOpacity(0.05);
+    return Color(0xFFFAFAFA);
   }
 
   Color _getDayBorderColor(WorkDay day, bool isWeekend, bool isSelected) {
-    if (isSelected) return Color(0xFFE30613);
+    if (isSelected) return Color(0xFF111827);
     if (day.hasWork) return Color(0xFFE30613).withOpacity(0.3);
-    if (isWeekend) return Color(0xFFFF8F00).withOpacity(0.3);
-    return Colors.grey[300]!;
+    if (isWeekend) return Color(0xFFF59E0B).withOpacity(0.3);
+    return Color(0xFFE5E7EB);
   }
 
   Color _getDayTextColor(WorkDay day, bool isWeekend, bool isSelected) {
-    if (isSelected) return Color(0xFFE30613);
-    if (day.hasWork) return Colors.grey[800]!;
-    if (isWeekend) return Color(0xFFFF8F00);
-    return Colors.grey[500]!;
+    if (isSelected) return Color(0xFF111827);
+    if (day.hasWork) return Color(0xFF111827);
+    if (isWeekend) return Color(0xFFF59E0B);
+    return Color(0xFF6B7280);
   }
 
-  Color _getShiftColor(String shiftName) {
+  Color _getShiftAccentColor(String shiftName) {
     switch (shiftName) {
       case 'Arbeitszeit':
         return Color(0xFFE30613);
       case 'RT':
-        return Color(0xFFFF8F00);
+        return Color(0xFFF59E0B);
       case 'TX':
-        return Color(0xFF1976D2);
+        return Color(0xFF6366F1);
       default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getShiftIcon(String shiftName) {
-    switch (shiftName) {
-      case 'Arbeitszeit':
-        return Icons.flight_takeoff;
-      case 'RT':
-        return Icons.hotel;
-      case 'TX':
-        return Icons.school;
-      default:
-        return Icons.schedule;
+        return Color(0xFF6B7280);
     }
   }
 
   String _getShiftDisplayName(String shiftName) {
     switch (shiftName) {
       case 'Arbeitszeit':
-        return 'Dienst';
+        return 'DIENST';
       case 'RT':
-        return 'Ruhezeit';
+        return 'RUHEZEIT';
       case 'TX':
-        return 'Training';
+        return 'BLOCKIERT';
       default:
-        return shiftName;
+        return shiftName.toUpperCase();
     }
   }
 }

@@ -81,233 +81,269 @@ class DayCard extends StatelessWidget {
     final dateText = _getDateText();
 
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      child: Material(
-        elevation: day.hasWork ? 3 : 1,
-        borderRadius: BorderRadius.circular(12),
-        shadowColor: day.hasWork
-            ? Color(0xFFE30613).withOpacity(0.2)
-            : Colors.grey.withOpacity(0.1),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: day.hasWork
-                  ? Color(0xFFE30613).withOpacity(0.2)
-                  : Colors.grey[200]!,
-              width: 1,
-            ),
-          ),
-          child: Column(
-            children: [
-              // Header section
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: day.hasWork
-                      ? Color(0xFFE30613).withOpacity(0.05)
-                      : Colors.grey[50],
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: day.hasWork
+              ? Color(0xFF111827).withOpacity(0.1)
+              : Color(0xFFE5E7EB),
+          width: day.hasWork ? 2 : 1,
+        ),
+        boxShadow: day.hasWork
+            ? [
+                BoxShadow(
+                  color: Color(0xFF111827).withOpacity(0.08),
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : [],
+      ),
+      child: Column(
+        children: [
+          // Header section
+          Container(
+            padding: EdgeInsets.all(20),
+            child: Row(
+              children: [
+                // Day number circle
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: day.hasWork ? Color(0xFF111827) : Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$dayNumber',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: day.hasWork ? Colors.white : Color(0xFF6B7280),
+                      ),
+                    ),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color:
-                            day.hasWork ? Color(0xFFE30613) : Colors.grey[400],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$dayNumber',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                SizedBox(width: 16),
+
+                // Date info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                dayName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: isWeekend
-                                      ? Color(0xFFFF8F00)
-                                      : Colors.grey[800],
-                                ),
-                              ),
-                              if (isWeekend) ...[
-                                SizedBox(width: 8),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFFFF8F00).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'WE',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFFF8F00),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          SizedBox(height: 2),
                           Text(
-                            dateText,
+                            dayName,
                             style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: Color(0xFF111827),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    if (day.hoursWorked.isNotEmpty && day.hoursWorked != '0:00')
-                      Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF2E7D32),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.schedule, size: 12, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              day.hoursWorked,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                          if (isWeekend) ...[
+                            SizedBox(width: 8),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Color(0xFFF59E0B).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'WE',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFF59E0B),
+                                ),
                               ),
                             ),
                           ],
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        dateText,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    // Transport button - only show if there's work
-                    if (day.hasWork && day.shifts.isNotEmpty) ...[
-                      SizedBox(width: 8),
-                      _buildTransportButton(context),
                     ],
-                  ],
-                ),
-              ),
-
-              // Content section
-              if (day.shifts.isNotEmpty) ...[
-                Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    children: day.shifts
-                        .map((shift) => Container(
-                              margin: EdgeInsets.only(bottom: 8),
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: _getShiftColor(shift.name)
-                                    .withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: _getShiftColor(shift.name)
-                                      .withOpacity(0.2),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: _getShiftColor(shift.name),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(
-                                      _getShiftIcon(shift.name),
-                                      size: 14,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _getShiftDisplayName(shift.name),
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[800],
-                                          ),
-                                        ),
-                                        Text(
-                                          _formatShiftInterval(shift.interval),
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold,
-                                            color: _getShiftColor(shift.name),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ))
-                        .toList(),
                   ),
                 ),
-              ] else if (!day.hasWork) ...[
-                Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Container(
-                    padding: EdgeInsets.all(12),
+
+                // Hours badge
+                if (day.hoursWorked.isNotEmpty && day.hoursWorked != '0:00')
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.grey[100],
+                      color: Color(0xFF059669),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.weekend, color: Colors.grey[500], size: 16),
-                        SizedBox(width: 8),
+                        Icon(Icons.schedule, size: 12, color: Colors.white),
+                        SizedBox(width: 4),
                         Text(
-                          isWeekend ? 'Wochenende' : 'Frei',
+                          day.hoursWorked,
                           style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
+
+                // Transport button
+                if (day.hasWork && day.shifts.isNotEmpty) ...[
+                  SizedBox(width: 8),
+                  _buildTransportButton(context),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
+
+          // Content section
+          if (day.shifts.isNotEmpty) ...[
+            Container(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                children: day.shifts
+                    .map((shift) => Container(
+                          margin: EdgeInsets.only(bottom: 8),
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFFAFAFA),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _getShiftAccentColor(shift.name),
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // Shift indicator
+                              Container(
+                                width: 4,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: _getShiftAccentColor(shift.name),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+
+                              SizedBox(width: 16),
+
+                              // Shift details
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: BoxDecoration(
+                                            color: _getShiftAccentColor(
+                                                shift.name),
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          _getShiftDisplayName(shift.name),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF6B7280),
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      _formatShiftInterval(shift.interval),
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF111827),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Shift icon
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _getShiftAccentColor(shift.name)
+                                      .withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  _getShiftIcon(shift.name),
+                                  size: 16,
+                                  color: _getShiftAccentColor(shift.name),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ] else if (!day.hasWork) ...[
+            Container(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        isWeekend ? Icons.weekend : Icons.free_breakfast,
+                        color: Color(0xFF6B7280),
+                        size: 16,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      isWeekend ? 'Wochenende' : 'Frei',
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -364,25 +400,21 @@ class DayCard extends StatelessWidget {
 
   Widget _buildTransportButton(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Color(0xFF1976D2),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      width: 40,
+      height: 40,
       child: Material(
-        color: Colors.transparent,
+        color: Color(0xFF111827),
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           onTap: () {
             print('Transport button tapped!');
             _showTransportInfo(context);
           },
-          child: Padding(
-            padding: EdgeInsets.all(8),
-            child: Icon(
-              Icons.directions_transit,
-              color: Colors.white,
-              size: 20,
-            ),
+          child: Icon(
+            Icons.directions_transit,
+            color: Colors.white,
+            size: 18,
           ),
         ),
       ),
@@ -463,14 +495,32 @@ class DayCard extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (context) => Dialog(
-        child: Padding(
-          padding: EdgeInsets.all(20),
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: Color(0xFFE30613)),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF111827)),
+                ),
+              ),
               SizedBox(height: 16),
-              Text('Öffentliche Verkehrsmittel werden geladen...'),
+              Text(
+                'Lade Verbindungen...',
+                style: TextStyle(
+                  color: Color(0xFF111827),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),
@@ -508,15 +558,58 @@ class DayCard extends StatelessWidget {
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Fehler'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK'),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Color(0xFFDC2626),
+                size: 32,
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Fehler',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                message,
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF111827),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text('OK'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -539,16 +632,16 @@ class DayCard extends StatelessWidget {
     return dayOfWeek == 5 || dayOfWeek == 6;
   }
 
-  Color _getShiftColor(String shiftName) {
+  Color _getShiftAccentColor(String shiftName) {
     switch (shiftName) {
       case 'Arbeitszeit':
         return Color(0xFFE30613);
       case 'RT':
-        return Color(0xFFFF8F00);
+        return Color(0xFFF59E0B);
       case 'TX':
-        return Color(0xFF1976D2);
+        return Color(0xFF6366F1);
       default:
-        return Colors.grey;
+        return Color(0xFF6B7280);
     }
   }
 
@@ -559,7 +652,7 @@ class DayCard extends StatelessWidget {
       case 'RT':
         return Icons.hotel;
       case 'TX':
-        return Icons.school;
+        return Icons.block;
       default:
         return Icons.schedule;
     }
@@ -568,13 +661,13 @@ class DayCard extends StatelessWidget {
   String _getShiftDisplayName(String shiftName) {
     switch (shiftName) {
       case 'Arbeitszeit':
-        return 'Dienst';
+        return 'DIENST';
       case 'RT':
-        return 'Ruhezeit';
+        return 'RUHEZEIT';
       case 'TX':
-        return 'Tag Frei geblockt';
+        return 'BLOCKIERT';
       default:
-        return shiftName;
+        return shiftName.toUpperCase();
     }
   }
 
@@ -637,28 +730,60 @@ class _TransportDialogState extends State<_TransportDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: Colors.transparent,
       child: Container(
-        constraints:
-            BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+          maxWidth: 400,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: EdgeInsets.all(20),
+            // Header
+            Container(
+              padding: EdgeInsets.all(24),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.directions_transit, color: Color(0xFFE30613)),
-                      SizedBox(width: 8),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Color(0xFF111827),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.directions_transit,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      SizedBox(width: 16),
                       Expanded(
-                        child: Text(
-                          'Anfahrt zum Flughafen',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Anfahrt',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            Text(
+                              'Zum Flughafen Wien',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       if (widget.routes.length > 1)
@@ -666,28 +791,34 @@ class _TransportDialogState extends State<_TransportDialog> {
                           padding:
                               EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Color(0xFFE30613).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            color: Color(0xFFFAFAFA),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Color(0xFFE5E7EB)),
                           ),
                           child: Text(
                             '${_currentIndex + 1}/${widget.routes.length}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Color(0xFFE30613),
-                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF111827),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                     ],
                   ),
+
+                  // Route tabs
                   if (widget.routes.length > 1) ...[
-                    SizedBox(height: 8),
-                    Row(
-                      children: List.generate(widget.routes.length, (index) {
-                        final route = widget.routes[index];
-                        final isSelected = index == _currentIndex;
-                        return Expanded(
-                          child: GestureDetector(
+                    SizedBox(height: 20),
+                    Container(
+                      height: 60,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.routes.length,
+                        itemBuilder: (context, index) {
+                          final route = widget.routes[index];
+                          final isSelected = index == _currentIndex;
+                          return GestureDetector(
                             onTap: () {
                               _pageController.animateToPage(
                                 index,
@@ -696,58 +827,56 @@ class _TransportDialogState extends State<_TransportDialog> {
                               );
                             },
                             child: Container(
-                              margin: EdgeInsets.symmetric(horizontal: 2),
-                              padding: EdgeInsets.symmetric(
-                                  vertical: 6, horizontal: 4),
+                              width: 100,
+                              margin: EdgeInsets.only(right: 8),
+                              padding: EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? Color(0xFFE30613)
-                                    : Colors.grey[200],
-                                borderRadius: BorderRadius.circular(4),
+                                    ? Color(0xFF111827)
+                                    : Color(0xFFFAFAFA),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? Color(0xFF111827)
+                                      : Color(0xFFE5E7EB),
+                                ),
                               ),
                               child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Ab ${route.formattedDepartureTime}',
+                                    route.formattedDepartureTime,
                                     style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
                                       color: isSelected
                                           ? Colors.white
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'An ${route.formattedArrivalTime}',
-                                    style: TextStyle(
-                                      fontSize: 8,
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Colors.grey[500],
+                                          : Color(0xFF111827),
                                     ),
                                   ),
                                   SizedBox(height: 2),
                                   Text(
                                     route.formattedDuration,
                                     style: TextStyle(
-                                      fontSize: 8,
+                                      fontSize: 10,
                                       color: isSelected
-                                          ? Colors.white
-                                          : Colors.grey[500],
+                                          ? Colors.white.withOpacity(0.8)
+                                          : Color(0xFF6B7280),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
+
+            // Content
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -762,67 +891,29 @@ class _TransportDialogState extends State<_TransportDialog> {
                 },
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  if (widget.routes.length > 1) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _currentIndex > 0
-                              ? () {
-                                  _pageController.previousPage(
-                                    duration: Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                  );
-                                }
-                              : null,
-                          icon: Icon(Icons.arrow_back, size: 16),
-                          label: Text('Vorherige'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey[200],
-                            foregroundColor: Colors.grey[700],
-                            elevation: 0,
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _currentIndex < widget.routes.length - 1
-                              ? () {
-                                  _pageController.nextPage(
-                                    duration: Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                  );
-                                }
-                              : null,
-                          icon: Icon(Icons.arrow_forward, size: 16),
-                          label: Text('Nächste'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey[200],
-                            foregroundColor: Colors.grey[700],
-                            elevation: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFFE30613),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text('Schließen'),
+
+            // Footer
+            Container(
+              padding: EdgeInsets.all(24),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF111827),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                ],
+                  child: Text(
+                    'Schließen',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -833,41 +924,49 @@ class _TransportDialogState extends State<_TransportDialog> {
 
   Widget _buildRouteDetails(TransportInfo info) {
     return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(horizontal: 20),
+      padding: EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Time info
           Container(
-            padding: EdgeInsets.all(12),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color(0xFFE30613).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Color(0xFFE30613).withOpacity(0.3)),
+              color: Color(0xFFFAFAFA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Color(0xFFE5E7EB)),
             ),
             child: Column(
               children: [
                 Row(
                   children: [
-                    Icon(Icons.schedule, color: Color(0xFFE30613)),
-                    SizedBox(width: 8),
+                    Container(
+                      width: 4,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF059669),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Abfahrt um ${info.formattedDepartureTime}',
+                            'Abfahrt ${info.formattedDepartureTime}',
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFE30613),
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
                             ),
                           ),
                           Text(
-                            'Ankunft um ${info.formattedArrivalTime}',
+                            'Ankunft ${info.formattedArrivalTime}',
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1976D2),
+                              color: Color(0xFF6B7280),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -875,25 +974,28 @@ class _TransportDialogState extends State<_TransportDialog> {
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 12),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.blue[200]!),
+                    color: Color(0xFF6366F1).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.info_outline,
-                          size: 12, color: Colors.blue[700]),
-                      SizedBox(width: 4),
+                      Icon(
+                        Icons.info_outline,
+                        size: 12,
+                        color: Color(0xFF6366F1),
+                      ),
+                      SizedBox(width: 6),
                       Text(
-                        'Ankunft ${widget.workStart.hour.toString().padLeft(2, '0')}:${widget.workStart.minute.toString().padLeft(2, '0')} geplant (10 Min früh)',
+                        'Ziel: ${widget.workStart.hour.toString().padLeft(2, '0')}:${widget.workStart.minute.toString().padLeft(2, '0')} (10 Min früher)',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.blue[700],
+                          color: Color(0xFF6366F1),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -902,68 +1004,116 @@ class _TransportDialogState extends State<_TransportDialog> {
               ],
             ),
           ),
-          SizedBox(height: 12),
+
+          SizedBox(height: 16),
+
+          // Stats
           Row(
             children: [
-              _buildInfoChip(Icons.timer, info.formattedDuration),
+              _buildInfoChip(Icons.schedule, info.formattedDuration),
               SizedBox(width: 8),
               _buildInfoChip(Icons.swap_horiz, '${info.transfers} Umst.'),
               SizedBox(width: 8),
               _buildInfoChip(Icons.eco, '${info.co2Grams}g CO₂'),
             ],
           ),
-          SizedBox(height: 12),
+
+          SizedBox(height: 20),
+
+          // Route details
           Text(
-            'Route:',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            'ROUTE',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111827),
+              letterSpacing: 1,
+            ),
           ),
-          SizedBox(height: 8),
-          ...info.legs.map((leg) => Padding(
-                padding: EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    Icon(
+
+          SizedBox(height: 12),
+
+          ...info.legs.asMap().entries.map((entry) {
+            final index = entry.key;
+            final leg = entry.value;
+            final isLast = index == info.legs.length - 1;
+
+            return Container(
+              margin: EdgeInsets.only(bottom: isLast ? 0 : 12),
+              child: Row(
+                children: [
+                  // Transport icon
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFAFAFA),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Color(0xFFE5E7EB)),
+                    ),
+                    child: Icon(
                       _getTransportIcon(leg.type),
                       size: 16,
-                      color: Colors.grey[600],
+                      color: Color(0xFF6B7280),
                     ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        leg.displayName,
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                    if (leg.durationMinutes != null)
-                      Text(
-                        '${leg.durationMinutes}min',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                  ),
+
+                  SizedBox(width: 12),
+
+                  // Leg details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          leg.displayName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF111827),
+                          ),
                         ),
-                      ),
-                  ],
-                ),
-              )),
+                        if (leg.durationMinutes != null)
+                          Text(
+                            '${leg.durationMinutes} Minuten',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+
+          // Disruption warning
           if (info.disruption != null) ...[
-            SizedBox(height: 12),
+            SizedBox(height: 16),
             Container(
-              padding: EdgeInsets.all(8),
+              padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Color(0xFFFEF3C7),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                border: Border.all(color: Color(0xFFF59E0B).withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning, color: Colors.orange, size: 16),
+                  Icon(
+                    Icons.warning_outlined,
+                    color: Color(0xFFF59E0B),
+                    size: 16,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       info.disruption!,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.orange[800],
+                        color: Color(0xFFB45309),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -971,7 +1121,8 @@ class _TransportDialogState extends State<_TransportDialog> {
               ),
             ),
           ],
-          SizedBox(height: 16),
+
+          SizedBox(height: 20),
         ],
       ),
     );
@@ -979,21 +1130,23 @@ class _TransportDialogState extends State<_TransportDialog> {
 
   Widget _buildInfoChip(IconData icon, String text) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
+        color: Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Color(0xFFE5E7EB)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.grey[600]),
+          Icon(icon, size: 12, color: Color(0xFF6B7280)),
           SizedBox(width: 4),
           Text(
             text,
             style: TextStyle(
               fontSize: 11,
-              color: Colors.grey[700],
+              color: Color(0xFF111827),
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
