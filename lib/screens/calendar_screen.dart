@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:planoviewer/screens/wish_screen.dart';
 import '../models/roster_models.dart';
 
@@ -469,7 +470,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         if (!isInRange) {
           // Empty cell for dates outside our range
           weekCells.add(Container(
-            height: 56,
+            height: 64, // Increased height for time display
             child: Center(
               child: Text(
                 '${cellDate.day}',
@@ -489,7 +490,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         final dayData = dayIndex < days.length ? days[dayIndex] : null;
 
         if (dayData == null) {
-          weekCells.add(Container(height: 56)); // No data for this day
+          weekCells.add(Container(height: 64)); // No data for this day
           continue;
         }
 
@@ -541,7 +542,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       },
       child: AnimatedContainer(
         duration: Duration(milliseconds: 200),
-        height: 56,
+        height: 64, // Increased height for time display
         decoration: BoxDecoration(
           color: _getDayBackgroundColor(dayData, isWeekend, isSelected),
           borderRadius: BorderRadius.circular(12),
@@ -550,59 +551,140 @@ class _CalendarScreenState extends State<CalendarScreen>
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${cellDate.day}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _getDayTextColor(dayData, isWeekend, isSelected),
-              ),
-            ),
-            SizedBox(height: 2),
-            if (dayData.hasWork && dayData.shifts.isNotEmpty) ...[
-              Container(
-                width: 16,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: Color(0xFFE30613),
-                  borderRadius: BorderRadius.circular(1),
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Day number
+              Text(
+                '${cellDate.day}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _getDayTextColor(dayData, isWeekend, isSelected),
                 ),
               ),
-            ] else if (dayData.hasWork && dayData.hoursWorked != '0:00') ...[
-              Container(
-                width: 12,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: Color(0xFF059669),
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-            ] else if (isWeekend) ...[
-              Container(
-                width: 8,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: Color(0xFFF59E0B),
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-            ] else ...[
-              Container(
-                width: 6,
-                height: 1,
-                decoration: BoxDecoration(
-                  color: Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
+
+              // Time display or indicator
+              if (_shouldShowTime(dayData)) ...[
+                SizedBox(height: 3),
+                _buildTimeDisplay(dayData),
+              ] else ...[
+                SizedBox(height: 4),
+                _buildDayIndicator(dayData, isWeekend),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  bool _shouldShowTime(WorkDay dayData) {
+    return dayData.hasWork && dayData.shifts.isNotEmpty;
+  }
+
+  Widget _buildTimeDisplay(WorkDay dayData) {
+    if (dayData.shifts.isEmpty) return _buildDayIndicator(dayData, false);
+
+    // Get the first shift for time display
+    final shift = dayData.shifts.first;
+    final timeRange = _extractCompactTime(shift.interval);
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      decoration: BoxDecoration(
+        color: _getShiftAccentColor(shift.name).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        timeRange,
+        style: TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w600,
+          color: _getShiftAccentColor(shift.name),
+          fontFamily: 'monospace',
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  String _extractCompactTime(String interval) {
+    if (interval.isEmpty) return '';
+
+    try {
+      // Convert to 24-hour format first
+      final formatted24h = _formatShiftInterval(interval);
+
+      // Extract compact time from "HH:MM-HH:MM" format
+      final regex = RegExp(r'(\d{2}):\d{2}[^\d]*(\d{2}):\d{2}');
+      final match = regex.firstMatch(formatted24h);
+
+      if (match != null) {
+        final startHour = match.group(1);
+        final endHour = match.group(2);
+        return '$startHour-$endHour';
+      }
+
+      // Fallback: try to extract just hours from any format
+      final hourRegex = RegExp(r'(\d{1,2})');
+      final matches = hourRegex.allMatches(formatted24h).toList();
+      if (matches.length >= 2) {
+        final startHour = matches[0].group(0)!.padLeft(2, '0');
+        final endHour = matches[1].group(0)!.padLeft(2, '0');
+        return '$startHour-$endHour';
+      }
+
+      // Last resort: return first 5 characters
+      return formatted24h.length > 5
+          ? formatted24h.substring(0, 5)
+          : formatted24h;
+    } catch (e) {
+      print('Error extracting compact time from "$interval": $e');
+      return interval.length > 5 ? interval.substring(0, 5) : interval;
+    }
+  }
+
+  Widget _buildDayIndicator(WorkDay dayData, bool isWeekend) {
+    if (dayData.hasWork && dayData.shifts.isNotEmpty) {
+      return Container(
+        width: 16,
+        height: 2,
+        decoration: BoxDecoration(
+          color: Color(0xFFE30613),
+          borderRadius: BorderRadius.circular(1),
+        ),
+      );
+    } else if (dayData.hasWork && dayData.hoursWorked != '0:00') {
+      return Container(
+        width: 12,
+        height: 2,
+        decoration: BoxDecoration(
+          color: Color(0xFF059669),
+          borderRadius: BorderRadius.circular(1),
+        ),
+      );
+    } else if (isWeekend) {
+      return Container(
+        width: 8,
+        height: 2,
+        decoration: BoxDecoration(
+          color: Color(0xFFF59E0B),
+          borderRadius: BorderRadius.circular(1),
+        ),
+      );
+    } else {
+      return Container(
+        width: 6,
+        height: 1,
+        decoration: BoxDecoration(
+          color: Color(0xFFE5E7EB),
+          borderRadius: BorderRadius.circular(1),
+        ),
+      );
+    }
   }
 
   Widget _buildMonthDivider(String monthName) {

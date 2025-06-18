@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planoviewer/models/calendar_model.dart';
 import 'package:planoviewer/widgets/api_token_dialog.dart';
+
+import 'package:planoviewer/widgets/wish_calendar_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../data/calendar_data.dart';
 import '../utils/calendar_utils.dart';
 
 import '../widgets/wish_calendar_widgets.dart';
-import '../widgets/wish_calendar_dialog.dart';
 
 class ShiftCalendarScreen extends StatefulWidget {
   const ShiftCalendarScreen({Key? key}) : super(key: key);
@@ -378,33 +379,1043 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
   }
 
   void _showSummaryDialog() {
-    ShiftCalendarDialogs.showSummaryDialog(
-      context: context,
-      selectedShifts: selectedShifts,
-      daysOff: daysOff,
-      onRemoveItem: _removeSummaryItem,
-    );
+    _showModernSummaryDialog();
   }
 
   void _showTokenInfoDialog() {
-    ShiftCalendarDialogs.showTokenInfoDialog(
-      context: context,
-      apiToken: _apiToken,
-      onChangeToken: _changeApiToken,
-    );
+    _showModernTokenInfoDialog();
   }
 
   void _logoutAndClearToken() {
-    ShiftCalendarDialogs.showLogoutDialog(
-      context: context,
-      onConfirm: _performLogout,
-    );
+    _showModernLogoutDialog();
   }
 
   void _changeApiToken() {
-    ShiftCalendarDialogs.showChangeTokenDialog(
+    _showModernChangeTokenDialog();
+  }
+
+  // Modern dialog implementations
+  void _showModernSummaryDialog() {
+    showDialog(
       context: context,
-      onConfirm: _resetAndShowTokenDialog,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: 420,
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE30613),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.list_alt,
+                        size: 32,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'Übersicht',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Alle geplanten Schichten und freien Zeiten',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Flexible(
+                child: (selectedShifts.isEmpty && daysOff.isEmpty)
+                    ? Container(
+                        padding: EdgeInsets.all(40),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Color(0xFFFAFAFA),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                Icons.schedule_outlined,
+                                size: 40,
+                                color: Color(0xFFE5E7EB),
+                              ),
+                            ),
+                            SizedBox(height: 24),
+                            Text(
+                              'Keine Planungen vorhanden',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Color(0xFF6B7280),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Tippe auf einen Tag im Kalender, um eine Schicht oder freie Zeit zu planen.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Container(
+                        padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: selectedShifts.length + daysOff.length,
+                          itemBuilder: (context, index) {
+                            if (index < selectedShifts.length) {
+                              // Shift item
+                              final entry =
+                                  selectedShifts.entries.elementAt(index);
+                              final shift = entry.value;
+                              final dateKey = entry.key;
+                              final shiftType =
+                                  CalendarUtils.getShiftType(shift.timeRange);
+
+                              return _buildSummaryShiftItem(
+                                  dateKey, shift, shiftType);
+                            } else {
+                              // Day off item
+                              final dayOffIndex = index - selectedShifts.length;
+                              final entry =
+                                  daysOff.entries.elementAt(dayOffIndex);
+                              final dayOff = entry.value;
+                              final dateKey = entry.key;
+
+                              return _buildSummaryDayOffItem(dateKey, dayOff);
+                            }
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryShiftItem(
+      String dateKey, SelectedShift shift, shiftType) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: CalendarUtils.getShiftTypeColor(shiftType).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: CalendarUtils.getShiftTypeColor(shiftType).withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color:
+                  CalendarUtils.getShiftTypeColor(shiftType).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              CalendarUtils.getShiftTypeIcon(shiftType),
+              color: CalendarUtils.getShiftTypeColor(shiftType),
+              size: 20,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  CalendarUtils.formatDisplayDate(shift.date),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  '${shift.timeRange} • ${CalendarUtils.getShiftTypeName(shiftType)}',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                CalendarUtils.calculateDuration(shift.timeRange),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: CalendarUtils.getShiftTypeColor(shiftType),
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => _removeSummaryItem(dateKey, shift: shift),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFE30613).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: Color(0xFFE30613),
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryDayOffItem(String dateKey, DayOff dayOff) {
+    Color itemColor = dayOff.isFullDay ? Color(0xFF059669) : Color(0xFF6366F1);
+    IconData itemIcon = dayOff.isFullDay ? Icons.event_busy : Icons.schedule;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: itemColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: itemColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: itemColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              itemIcon,
+              color: itemColor,
+              size: 20,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  CalendarUtils.formatDisplayDate(dayOff.date),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  dayOff.isFullDay
+                      ? 'Ganzer Tag frei'
+                      : 'Teilweise frei ${dayOff.timeRange}',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!dayOff.isFullDay)
+                Text(
+                  CalendarUtils.calculateDuration(dayOff.timeRange!),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: itemColor,
+                    fontSize: 14,
+                  ),
+                ),
+              SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => _removeSummaryItem(dateKey, dayOff: dayOff),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFE30613).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: Color(0xFFE30613),
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showModernTokenInfoDialog() {
+    String maskedToken = _apiToken != null
+        ? '${_apiToken!.substring(0, 8)}${'*' * (_apiToken!.length - 12)}${_apiToken!.substring(_apiToken!.length - 4)}'
+        : 'Kein Token';
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF6366F1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.info, color: Colors.white, size: 32),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'API-Token Information',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Container(
+                padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'AKTUELLER TOKEN',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFAFAFA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Color(0xFFE5E7EB)),
+                      ),
+                      child: Text(
+                        maskedToken,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 14,
+                          color: Color(0xFF111827),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Color(0xFF059669).withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Color(0xFF059669),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Token ist gültig und gespeichert',
+                              style: TextStyle(
+                                color: Color(0xFF059669),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Color(0xFFE5E7EB)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Schließen',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _changeApiToken();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFFE30613),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Token ändern',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showModernLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE30613),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.logout, color: Colors.white, size: 32),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'Abmelden',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Möchtest du dich wirklich abmelden?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Container(
+                padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Color(0xFFDC2626).withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFDC2626),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'WARNUNG',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFDC2626),
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Dies wird den gespeicherten API-Token löschen, alle geplanten Schichten entfernen und dich zur Token-Eingabe zurückführen.',
+                                  style: TextStyle(
+                                    color: Color(0xFFDC2626),
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Color(0xFFE5E7EB)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Abbrechen',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _performLogout();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFFE30613),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Abmelden',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showModernChangeTokenDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Color(0xFFF59E0B),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.key, color: Colors.white, size: 32),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'API-Token ändern',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Möchtest du wirklich einen neuen API-Token eingeben?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Container(
+                padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Color(0xFFF59E0B).withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF59E0B),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Dies wird alle aktuellen Daten zurücksetzen und dich zur Token-Eingabe führen.',
+                              style: TextStyle(
+                                color: Color(0xFFF59E0B),
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Color(0xFFE5E7EB)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Abbrechen',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _resetAndShowTokenDialog();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFFF59E0B),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Token ändern',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showQuickRemoveDialog(DateTime date, String itemType,
+      String itemDetails, bool isShift, VoidCallback onConfirm) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE30613),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.delete_outline,
+                          color: Colors.white, size: 32),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      '$itemType entfernen',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Willst du den ${isShift ? 'Schicht' : 'Freizeiteintrag'} wirklich entfernen?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Container(
+                padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFAFAFA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Color(0xFFE5E7EB)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isShift
+                                  ? Color(0xFFE30613).withOpacity(0.1)
+                                  : Color(0xFF059669).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              isShift ? Icons.work : Icons.event_busy,
+                              size: 20,
+                              color: isShift
+                                  ? Color(0xFFE30613)
+                                  : Color(0xFF059669),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  CalendarUtils.formatDisplayDate(date),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  itemDetails,
+                                  style: TextStyle(
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: Color(0xFFE5E7EB)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Abbrechen',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                onConfirm();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFFE30613),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Entfernen',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -531,13 +1542,12 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
             ? 'Ganzer Tag frei'
             : 'Teilweise frei ${dayOff.timeRange}';
 
-    ShiftCalendarDialogs.showQuickRemoveDialog(
-      context: context,
-      date: date,
-      itemType: itemType,
-      itemDetails: itemDetails,
-      isShift: shift != null,
-      onConfirm: () => _confirmRemoval(dateKey, shift, dayOff, itemType),
+    _showQuickRemoveDialog(
+      date,
+      itemType,
+      itemDetails,
+      shift != null,
+      () => _confirmRemoval(dateKey, shift, dayOff, itemType),
     );
   }
 

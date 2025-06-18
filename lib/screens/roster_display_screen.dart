@@ -1,8 +1,10 @@
 // screens/roster_display_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:planoviewer/widgets/api_token_dialog.dart';
 import '../models/roster_models.dart';
 import '../widgets/day_card.dart';
+
 import '../services/pdf_export_service.dart';
 import 'calendar_screen.dart';
 
@@ -103,8 +105,14 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✓ PDF exportiert'),
-          backgroundColor: Color(0xFF111827),
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('PDF erfolgreich exportiert'),
+            ],
+          ),
+          backgroundColor: Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -114,8 +122,14 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fehler beim Export'),
-          backgroundColor: Color(0xFFDC2626),
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('Fehler beim Export: ${e.toString()}')),
+            ],
+          ),
+          backgroundColor: Color(0xFFE30613),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -126,6 +140,43 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
       setState(() {
         _isExporting = false;
       });
+    }
+  }
+
+  Future<void> _showTokenUpdateDialog() async {
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return TokenInputDialog(
+          title: 'API-Token aktualisieren',
+          subtitle: 'Gib einen neuen API-Token ein, um fortzufahren',
+          onTokenSubmitted: () {
+            // This callback is called when validation starts
+          },
+        );
+      },
+    );
+
+    if (result != null && result.isNotEmpty) {
+      // Token was updated successfully
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('API-Token erfolgreich aktualisiert'),
+            ],
+          ),
+          backgroundColor: Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: EdgeInsets.all(16),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -223,6 +274,28 @@ class _RosterDisplayScreenState extends State<RosterDisplayScreen>
                 // Action buttons
                 Row(
                   children: [
+                    // Update API Token
+                    Container(
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        onPressed: _showTokenUpdateDialog,
+                        icon: Icon(
+                          Icons.key,
+                          color: Color(0xFF111827),
+                          size: 20,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(width: 8),
+
                     // Calendar view
                     Container(
                       width: 44,

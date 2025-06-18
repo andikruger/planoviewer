@@ -374,7 +374,7 @@ class ShiftCalendarGrid extends StatelessWidget {
     return GridView.builder(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
-        childAspectRatio: 0.8,
+        childAspectRatio: 0.75, // Slightly taller to accommodate time display
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
       ),
@@ -437,7 +437,6 @@ class ShiftCalendarDay extends StatelessWidget {
       onLongPress: onLongPress,
       child: AnimatedContainer(
         duration: Duration(milliseconds: 200),
-        height: 56,
         decoration: BoxDecoration(
           color: _getDayBackgroundColor(),
           borderRadius: BorderRadius.circular(12),
@@ -446,23 +445,136 @@ class ShiftCalendarDay extends StatelessWidget {
             width: (selectedShift != null || dayOff != null) ? 2 : 1,
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$dayNumber',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _getDayTextColor(),
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Day number
+              Text(
+                '$dayNumber',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _getDayTextColor(),
+                ),
               ),
-            ),
-            SizedBox(height: 2),
-            _buildDayIndicator(),
-          ],
+
+              // Time display
+              if (_shouldShowTime()) ...[
+                SizedBox(height: 3),
+                _buildTimeDisplay(),
+              ] else ...[
+                SizedBox(height: 4),
+                _buildDayIndicator(),
+              ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  bool _shouldShowTime() {
+    return selectedShift != null || (dayOff != null && !dayOff!.isFullDay);
+  }
+
+  Widget _buildTimeDisplay() {
+    if (selectedShift != null) {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+        decoration: BoxDecoration(
+          color: _getTimeBackgroundColor(),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          _formatTimeRange(selectedShift!.timeRange),
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w600,
+            color: _getTimeTextColor(),
+            fontFamily: 'monospace',
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    } else if (dayOff != null && !dayOff!.isFullDay) {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+        decoration: BoxDecoration(
+          color: Color(0xFF6366F1).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          _formatTimeRange(dayOff!.timeRange!),
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF6366F1),
+            fontFamily: 'monospace',
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    } else if (dayOff != null && dayOff!.isFullDay) {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: Color(0xFF059669).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          'FREI',
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF059669),
+            letterSpacing: 0.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return _buildDayIndicator();
+  }
+
+  String _formatTimeRange(String timeRange) {
+    // Convert "0800-1600" to "08-16" for compact display
+    if (timeRange.length >= 9 && timeRange.contains('-')) {
+      final parts = timeRange.split('-');
+      if (parts.length == 2) {
+        final startHour = parts[0].substring(0, 2);
+        final endHour = parts[1].substring(0, 2);
+        return '$startHour-$endHour';
+      }
+    }
+
+    // Fallback: try to extract just the hours
+    final regex = RegExp(r'(\d{2}):\d{2}-(\d{2}):\d{2}');
+    final match = regex.firstMatch(timeRange);
+    if (match != null) {
+      return '${match.group(1)}-${match.group(2)}';
+    }
+
+    // If all else fails, return first 5 characters
+    return timeRange.length > 5 ? timeRange.substring(0, 5) : timeRange;
+  }
+
+  Color _getTimeBackgroundColor() {
+    if (selectedShift != null) {
+      final shiftType = CalendarUtils.getShiftType(selectedShift!.timeRange);
+      return CalendarUtils.getShiftTypeColor(shiftType).withOpacity(0.1);
+    }
+    return Color(0xFF6366F1).withOpacity(0.1);
+  }
+
+  Color _getTimeTextColor() {
+    if (selectedShift != null) {
+      final shiftType = CalendarUtils.getShiftType(selectedShift!.timeRange);
+      return CalendarUtils.getShiftTypeColor(shiftType);
+    }
+    return Color(0xFF6366F1);
   }
 
   Widget _buildDayIndicator() {
