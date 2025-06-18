@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../data/calendar_data.dart';
 import '../utils/calendar_utils.dart';
-import '../widgets/calendar_widgets.dart';
+
 import '../widgets/wish_calendar_widgets.dart';
 import '../widgets/wish_calendar_dialog.dart';
 
@@ -25,7 +25,6 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
   late AnimationController _selectionController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _slideAnimation;
-  late Animation<double> _selectionAnimation;
 
   // Store selected shifts and days off
   Map<String, SelectedShift> selectedShifts = {};
@@ -74,13 +73,6 @@ class _ShiftCalendarScreenState extends State<ShiftCalendarScreen>
       CurvedAnimation(
         parent: _animationController,
         curve: Interval(0.2, 0.8, curve: Curves.easeOutCubic),
-      ),
-    );
-
-    _selectionAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _selectionController,
-        curve: Curves.elasticOut,
       ),
     );
 
