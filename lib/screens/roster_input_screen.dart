@@ -251,7 +251,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     final String startDateStr;
     final String endDateStr;
 
-    if (now.day < 20) {
+    if (now.day < 30) {
       startDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
       endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
       print(
