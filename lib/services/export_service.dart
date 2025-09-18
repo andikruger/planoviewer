@@ -396,13 +396,27 @@ class ExportService {
   // Date/time formatting for ICS files
   String _formatDateTimeICS(DateTime date, String time) {
     try {
+      // Handle overnight shifts with +1 notation
+      bool isNextDay = time.contains('+1');
+      String cleanTime = time.replaceAll('+1', '').trim();
+
       // Convert time to 24-hour format if needed
-      final cleanTime = _convertTo24Hour(time);
-      final timeParts = cleanTime.split(':');
+      final cleanTime24h = _convertTo24Hour(cleanTime);
+      final timeParts = cleanTime24h.split(':');
       final hour = int.parse(timeParts[0]);
       final minute = int.parse(timeParts[1]);
 
-      final dateTime = DateTime(date.year, date.month, date.day, hour, minute);
+      // Create the datetime, adding a day if it's an overnight shift
+      DateTime dateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        hour,
+        minute,
+      );
+      if (isNextDay) {
+        dateTime = dateTime.add(Duration(days: 1));
+      }
 
       // ICS format: YYYYMMDDTHHMMSS
       return '${dateTime.year}'
@@ -580,19 +594,27 @@ class ExportService {
 
       if (day.shifts.isNotEmpty) {
         for (final shift in day.shifts) {
-          buffer.writeln('BEGIN:VEVENT');
-          buffer.writeln(
-            'UID:${DateTime.now().millisecondsSinceEpoch}-$i@austrianairlines.com',
-          );
-          buffer.writeln(
-            'DTSTART:${_formatDateTimeICS(actualDate, shift.interval.split('-')[0].trim())}',
-          );
-          buffer.writeln(
-            'DTEND:${_formatDateTimeICS(actualDate, shift.interval.split('-')[1].trim())}',
-          );
-          buffer.writeln('SUMMARY:Schicht - Austrian Airlines');
-          buffer.writeln('DESCRIPTION:Arbeitszeit: ${shift.interval}');
-          buffer.writeln('END:VEVENT');
+          // Better interval parsing
+          final intervalParts = shift.interval.contains(' - ')
+              ? shift.interval.split(' - ')
+              : shift.interval.split('-');
+
+          if (intervalParts.length >= 2) {
+            final startTime = intervalParts[0].trim();
+            final endTime = intervalParts[1].trim();
+
+            buffer.writeln('BEGIN:VEVENT');
+            buffer.writeln(
+              'UID:${DateTime.now().millisecondsSinceEpoch}-$i-${shift.hashCode}@austrianairlines.com',
+            );
+            buffer.writeln(
+              'DTSTART:${_formatDateTimeICS(actualDate, startTime)}',
+            );
+            buffer.writeln('DTEND:${_formatDateTimeICS(actualDate, endTime)}');
+            buffer.writeln('SUMMARY:Schicht');
+            buffer.writeln('DESCRIPTION:Arbeitszeit: ${shift.interval}');
+            buffer.writeln('END:VEVENT');
+          }
         }
       }
     }
