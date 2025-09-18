@@ -2,10 +2,12 @@
 
 // ignore_for_file: unused_local_variable
 
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:planoviewer/screens/roster_display_screen.dart';
 import '../models/roster_models.dart';
 
 import 'package:pdf/pdf.dart';
@@ -14,26 +16,603 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 // Web-specific import
+// ignore: deprecated_member_use
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
-class PDFExportService {
+class ExportService {
   final DateTime startDate;
   final DateTime endDate;
 
-  PDFExportService({
-    required this.startDate,
-    required this.endDate,
-  });
+  ExportService({required this.startDate, required this.endDate});
+
+  Future<void> exportRoster(
+    BuildContext context,
+    WorkRosterData rosterData,
+    ExportFormat format,
+  ) async {
+    switch (format) {
+      case ExportFormat.pdfList:
+        await _exportRosterToPDFList(context, rosterData);
+        break;
+      case ExportFormat.pdfCalendar:
+        await _exportRosterToPDFCalendar(context, rosterData);
+        break;
+      case ExportFormat.csv:
+        await _exportRosterToCSV(context, rosterData);
+        break;
+      case ExportFormat.icalendar:
+        await _exportRosterToICS(context, rosterData);
+        break;
+      case ExportFormat.pdf:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case ExportFormat.listCsv:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case ExportFormat.calendarCsv:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+    }
+  }
+
+  Future<void> _exportRosterToPDFList(
+    BuildContext context,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      _showExportDialog(context, 'PDF Liste wird erstellt...', Icons.list_alt);
+
+      final days = rosterData.getDays();
+
+      if (kIsWeb) {
+        await _generateAndDownloadPDFListWeb(context, days, rosterData);
+      } else {
+        await _generateAndSavePDFListMobile(context, days, rosterData);
+      }
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim PDF-Liste-Export: $e');
+    }
+  }
+
+  Future<void> _exportRosterToPDFCalendar(
+    BuildContext context,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      _showExportDialog(
+        context,
+        'PDF Kalender wird erstellt...',
+        Icons.calendar_view_month,
+      );
+
+      final days = rosterData.getDays();
+
+      if (kIsWeb) {
+        await _generateAndDownloadPDFCalendarWeb(context, days, rosterData);
+      } else {
+        await _generateAndSavePDFCalendarMobile(context, days, rosterData);
+      }
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim PDF-Kalender-Export: $e');
+    }
+  }
+
+  // Web download methods
+  Future<void> _generateAndDownloadPDFListWeb(
+    BuildContext context,
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      final pdf = await _generateCompactPDF(days, rosterData);
+      final pdfBytes = await pdf.save();
+
+      final blob = html.Blob([pdfBytes], 'application/pdf');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+
+      final filename = _generateFilename(
+        'pdf',
+      ).replaceAll('.pdf', '_Liste.pdf');
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+
+      html.Url.revokeObjectUrl(url);
+      Navigator.pop(context);
+      _showSuccessSnackBar(context, 'PDF Liste heruntergeladen: $filename');
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim Web-Download: $e');
+    }
+  }
+
+  Future<void> _generateAndDownloadPDFCalendarWeb(
+    BuildContext context,
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      final pdf = await _generateCalendarPDF(days, rosterData);
+      final pdfBytes = await pdf.save();
+
+      final blob = html.Blob([pdfBytes], 'application/pdf');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+
+      final filename = _generateFilename(
+        'pdf',
+      ).replaceAll('.pdf', '_Kalender.pdf');
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+
+      html.Url.revokeObjectUrl(url);
+      Navigator.pop(context);
+      _showSuccessSnackBar(context, 'PDF Kalender heruntergeladen: $filename');
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim Web-Download: $e');
+    }
+  }
+
+  // Mobile save methods
+  Future<void> _generateAndSavePDFListMobile(
+    BuildContext context,
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) {
+          status = await Permission.manageExternalStorage.request();
+          if (!status.isGranted) {
+            Navigator.pop(context);
+            _showErrorSnackBar(context, 'Speicherberechtigung erforderlich');
+            return;
+          }
+        }
+      }
+
+      final pdf = await _generateCompactPDF(days, rosterData);
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        try {
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+        } catch (e) {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Konnte Speicherort nicht finden');
+      }
+
+      final filename = _generateFilename(
+        'pdf',
+      ).replaceAll('.pdf', '_Liste.pdf');
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(await pdf.save());
+
+      Navigator.pop(context);
+      _showSuccessSnackBar(context, 'PDF Liste gespeichert: $filename');
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim Speichern: $e');
+    }
+  }
+
+  Future<void> _generateAndSavePDFCalendarMobile(
+    BuildContext context,
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) {
+          status = await Permission.manageExternalStorage.request();
+          if (!status.isGranted) {
+            Navigator.pop(context);
+            _showErrorSnackBar(context, 'Speicherberechtigung erforderlich');
+            return;
+          }
+        }
+      }
+
+      final pdf = await _generateCalendarPDF(days, rosterData);
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        try {
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+        } catch (e) {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Konnte Speicherort nicht finden');
+      }
+
+      final filename = _generateFilename(
+        'pdf',
+      ).replaceAll('.pdf', '_Kalender.pdf');
+      final file = File('${directory.path}/$filename');
+      await file.writeAsBytes(await pdf.save());
+
+      Navigator.pop(context);
+      _showSuccessSnackBar(context, 'PDF Kalender gespeichert: $filename');
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim Speichern: $e');
+    }
+  }
+
+  Future<void> _exportRosterToCSV(
+    BuildContext context,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      _showExportDialog(context, 'CSV wird erstellt...', Icons.table_chart);
+
+      final days = rosterData.getDays();
+      final csvContent = _generateCSVContent(days);
+
+      if (kIsWeb) {
+        await _downloadCSVWeb(context, csvContent);
+      } else {
+        await _saveCSVMobile(context, csvContent);
+      }
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim CSV-Export: $e');
+    }
+  }
+
+  // Show export dialog (reusable version of your existing PDF dialog)
+  void _showExportDialog(BuildContext context, String message, IconData icon) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: Colors.transparent,
+        content: Container(
+          padding: EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: Offset(0, 20),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Color(0xFFE30613),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, size: 32, color: Colors.white),
+              ),
+              SizedBox(height: 24),
+              Text(
+                message,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Dienstplan wird formatiert und optimiert',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF6B7280),
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Success snackbar
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Color(0xFF059669),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: EdgeInsets.all(16),
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
+  // Error snackbar
+  void _showErrorSnackBar(BuildContext context, String message) {
+    Navigator.pop(context); // Close dialog if open
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.error, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Color(0xFFE30613),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // Full day names for CSV
+  String _getDayNameFull(int weekday) {
+    final days = [
+      'Montag',
+      'Dienstag',
+      'Mittwoch',
+      'Donnerstag',
+      'Freitag',
+      'Samstag',
+      'Sonntag',
+    ];
+    return days[weekday - 1];
+  }
+
+  // Date formatting for CSV
+  String _formatDateCSV(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  }
+
+  // Date/time formatting for ICS files
+  String _formatDateTimeICS(DateTime date, String time) {
+    try {
+      // Convert time to 24-hour format if needed
+      final cleanTime = _convertTo24Hour(time);
+      final timeParts = cleanTime.split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+
+      final dateTime = DateTime(date.year, date.month, date.day, hour, minute);
+
+      // ICS format: YYYYMMDDTHHMMSS
+      return '${dateTime.year}'
+          '${dateTime.month.toString().padLeft(2, '0')}'
+          '${dateTime.day.toString().padLeft(2, '0')}'
+          'T'
+          '${dateTime.hour.toString().padLeft(2, '0')}'
+          '${dateTime.minute.toString().padLeft(2, '0')}'
+          '00';
+    } catch (e) {
+      // Fallback to date only
+      return '${date.year}'
+          '${date.month.toString().padLeft(2, '0')}'
+          '${date.day.toString().padLeft(2, '0')}';
+    }
+  }
+
+  // Mobile file saving for CSV
+  Future<void> _saveCSVMobile(BuildContext context, String content) async {
+    try {
+      // Use same permission logic as your PDF method
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) {
+          status = await Permission.manageExternalStorage.request();
+          if (!status.isGranted) {
+            Navigator.pop(context);
+            _showErrorSnackBar(context, 'Speicherberechtigung erforderlich');
+            return;
+          }
+        }
+      }
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        try {
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+        } catch (e) {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Konnte Speicherort nicht finden');
+      }
+
+      final filename = _generateFilename('csv');
+      final file = File('${directory.path}/$filename');
+      await file.writeAsString(content, encoding: utf8);
+
+      Navigator.pop(context);
+      _showSuccessSnackBar(context, 'CSV gespeichert: $filename');
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim Speichern: $e');
+    }
+  }
+
+  // Mobile file saving for ICS
+  Future<void> _saveICSMobile(BuildContext context, String content) async {
+    try {
+      // Same permission and directory logic as CSV
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) {
+          status = await Permission.manageExternalStorage.request();
+          if (!status.isGranted) {
+            Navigator.pop(context);
+            _showErrorSnackBar(context, 'Speicherberechtigung erforderlich');
+            return;
+          }
+        }
+      }
+
+      Directory? directory;
+      if (Platform.isAndroid) {
+        try {
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+        } catch (e) {
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Konnte Speicherort nicht finden');
+      }
+
+      final filename = _generateFilename('ics');
+      final file = File('${directory.path}/$filename');
+      await file.writeAsString(content, encoding: utf8);
+
+      Navigator.pop(context);
+      _showSuccessSnackBar(context, 'iCalendar gespeichert: $filename');
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim Speichern: $e');
+    }
+  }
+
+  String _generateCSVContent(List<WorkDay> days) {
+    final buffer = StringBuffer();
+
+    // CSV Header
+    buffer.writeln('Datum,Tag,Zeiten,Stunden,Typ');
+
+    // CSV Rows
+    for (int i = 0; i < days.length; i++) {
+      final day = days[i];
+      final actualDate = startDate.add(Duration(days: i));
+      final dayName = _getDayNameFull(actualDate.weekday);
+      final isWeekend = actualDate.weekday >= 6;
+
+      final shifts = day.shifts.isNotEmpty
+          ? day.shifts.map((s) => _formatShiftInterval(s.interval)).join('; ')
+          : (isWeekend ? 'Wochenende' : 'Frei');
+
+      final hours = day.hoursWorked != '0:00' ? day.hoursWorked : '';
+      final type = day.shifts.isNotEmpty
+          ? 'Arbeit'
+          : (isWeekend ? 'Wochenende' : 'Frei');
+
+      buffer.writeln(
+        '"${_formatDateCSV(actualDate)}","$dayName","$shifts","$hours","$type"',
+      );
+    }
+
+    return buffer.toString();
+  }
+
+  Future<void> _exportRosterToICS(
+    BuildContext context,
+    WorkRosterData rosterData,
+  ) async {
+    try {
+      _showExportDialog(
+        context,
+        'iCalendar wird erstellt...',
+        Icons.calendar_today,
+      );
+
+      final days = rosterData.getDays();
+      final icsContent = _generateICSContent(days);
+
+      if (kIsWeb) {
+        await _downloadICSWeb(context, icsContent);
+      } else {
+        await _saveICSMobile(context, icsContent);
+      }
+    } catch (e) {
+      _showErrorSnackBar(context, 'Fehler beim iCalendar-Export: $e');
+    }
+  }
+
+  String _generateICSContent(List<WorkDay> days) {
+    final buffer = StringBuffer();
+
+    // ICS Header
+    buffer.writeln('BEGIN:VCALENDAR');
+    buffer.writeln('VERSION:2.0');
+    buffer.writeln('PRODID:-//Austrian Airlines//Planoviewer//DE');
+    buffer.writeln('CALSCALE:GREGORIAN');
+
+    // Events
+    for (int i = 0; i < days.length; i++) {
+      final day = days[i];
+      final actualDate = startDate.add(Duration(days: i));
+
+      if (day.shifts.isNotEmpty) {
+        for (final shift in day.shifts) {
+          buffer.writeln('BEGIN:VEVENT');
+          buffer.writeln(
+            'UID:${DateTime.now().millisecondsSinceEpoch}-$i@austrianairlines.com',
+          );
+          buffer.writeln(
+            'DTSTART:${_formatDateTimeICS(actualDate, shift.interval.split('-')[0].trim())}',
+          );
+          buffer.writeln(
+            'DTEND:${_formatDateTimeICS(actualDate, shift.interval.split('-')[1].trim())}',
+          );
+          buffer.writeln('SUMMARY:Schicht - Austrian Airlines');
+          buffer.writeln('DESCRIPTION:Arbeitszeit: ${shift.interval}');
+          buffer.writeln('END:VEVENT');
+        }
+      }
+    }
+
+    buffer.writeln('END:VCALENDAR');
+    return buffer.toString();
+  }
 
   Future<void> exportRosterToPDF(
-      BuildContext context, WorkRosterData rosterData) async {
+    BuildContext context,
+    WorkRosterData rosterData,
+  ) async {
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           backgroundColor: Colors.transparent,
           content: Container(
             padding: EdgeInsets.all(32),
@@ -107,11 +686,44 @@ class PDFExportService {
     }
   }
 
+  Future<void> _downloadCSVWeb(BuildContext context, String content) async {
+    final bytes = utf8.encode(content);
+    final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+
+    final filename = _generateFilename('csv');
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute('download', filename)
+      ..click();
+
+    html.Url.revokeObjectUrl(url);
+    Navigator.pop(context);
+    _showSuccessSnackBar(context, 'CSV heruntergeladen: $filename');
+  }
+
+  Future<void> _downloadICSWeb(BuildContext context, String content) async {
+    final bytes = utf8.encode(content);
+    final blob = html.Blob([bytes], 'text/calendar;charset=utf-8');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+
+    final filename = _generateFilename('ics');
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute('download', filename)
+      ..click();
+
+    html.Url.revokeObjectUrl(url);
+    Navigator.pop(context);
+    _showSuccessSnackBar(context, 'iCalendar heruntergeladen: $filename');
+  }
+
   // Web PDF download
-  Future<void> _generateAndDownloadPDFWeb(BuildContext context,
-      List<WorkDay> days, WorkRosterData rosterData) async {
+  Future<void> _generateAndDownloadPDFWeb(
+    BuildContext context,
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
     try {
-      final pdf = await _generatePDF(days, rosterData);
+      final pdf = await _generateCompactPDF(days, rosterData);
       final pdfBytes = await pdf.save();
 
       // Create blob and trigger download
@@ -119,9 +731,11 @@ class PDFExportService {
       final url = html.Url.createObjectUrlFromBlob(blob);
 
       // Create filename with timestamp and actual date range
-      final timestamp =
-          DateTime.now().toString().replaceAll(':', '-').substring(0, 19);
-      final filename = _generateFilename(timestamp);
+      final timestamp = DateTime.now()
+          .toString()
+          .replaceAll(':', '-')
+          .substring(0, 19);
+      final filename = _generateFilename('pdf');
 
       // Create download link and trigger download
       final anchor = html.AnchorElement(href: url)
@@ -144,8 +758,9 @@ class PDFExportService {
           ),
           backgroundColor: Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: Duration(seconds: 4),
         ),
       );
@@ -161,8 +776,11 @@ class PDFExportService {
   }
 
   // Mobile PDF save
-  Future<void> _generateAndSavePDFMobile(BuildContext context,
-      List<WorkDay> days, WorkRosterData rosterData) async {
+  Future<void> _generateAndSavePDFMobile(
+    BuildContext context,
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
     try {
       // Request storage permission for Android
       if (Platform.isAndroid) {
@@ -182,7 +800,7 @@ class PDFExportService {
         }
       }
 
-      final pdf = await _generatePDF(days, rosterData);
+      final pdf = await _generateCompactPDF(days, rosterData);
 
       // Get the appropriate directory
       Directory? directory;
@@ -209,9 +827,11 @@ class PDFExportService {
       }
 
       // Create filename with timestamp and actual date range
-      final timestamp =
-          DateTime.now().toString().replaceAll(':', '-').substring(0, 19);
-      final filename = _generateFilename(timestamp);
+      final timestamp = DateTime.now()
+          .toString()
+          .replaceAll(':', '-')
+          .substring(0, 19);
+      final filename = _generateFilename('pdf');
       final file = File('${directory.path}/$filename');
 
       // Save the PDF
@@ -231,8 +851,9 @@ class PDFExportService {
           ),
           backgroundColor: Color(0xFF059669),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: Duration(seconds: 4),
         ),
       );
@@ -248,7 +869,12 @@ class PDFExportService {
   }
 
   // Generate filename based on actual date range
-  String _generateFilename(String timestamp) {
+
+  String _generateFilename(String extension) {
+    final timestamp = DateTime.now()
+        .toString()
+        .replaceAll(':', '-')
+        .substring(0, 19);
     final monthNames = [
       '',
       'Januar',
@@ -262,19 +888,17 @@ class PDFExportService {
       'September',
       'Oktober',
       'November',
-      'Dezember'
+      'Dezember',
     ];
 
     final startMonth = monthNames[startDate.month];
     final endMonth = monthNames[endDate.month];
 
-    if (startDate.month == endDate.month) {
-      // Same month
-      return 'Austrian_Airlines_Dienstplan_${startMonth}_${startDate.year}_$timestamp.pdf';
-    } else {
-      // Cross-month
-      return 'Austrian_Airlines_Dienstplan_${startMonth}_${endMonth}_${startDate.year}_$timestamp.pdf';
-    }
+    final monthPart = startDate.month == endDate.month
+        ? startMonth
+        : '${startMonth}_${endMonth}';
+
+    return 'Austrian_Airlines_Dienstplan_${monthPart}_${startDate.year}_$timestamp.$extension';
   }
 
   // Generate PDF header text based on actual date range
@@ -292,7 +916,7 @@ class PDFExportService {
       'SEPTEMBER',
       'OKTOBER',
       'NOVEMBER',
-      'DEZEMBER'
+      'DEZEMBER',
     ];
 
     final startMonth = monthNames[startDate.month];
@@ -308,293 +932,136 @@ class PDFExportService {
   }
 
   // Generate PDF document with clean, app-matching design
-  Future<pw.Document> _generatePDF(
-      List<WorkDay> days, WorkRosterData rosterData) async {
+  Future<pw.Document> _generateCompactPDF(
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
     final pdf = pw.Document();
     final workingDays = days.where((d) => d.hasWork).length;
     final totalHours = rosterData.getTotalHours();
-    final totalDays = days.length;
 
-    // Define color scheme matching your app
+    // Colors
     final primaryRed = PdfColor.fromHex('#E30613');
-    final lightGray = PdfColor.fromHex('#FAFAFA');
+    final lightGray = PdfColor.fromHex('#F9FAFB');
     final mediumGray = PdfColor.fromHex('#6B7280');
     final darkGray = PdfColor.fromHex('#111827');
-    final lightBorder = PdfColor.fromHex('#E5E7EB');
-    final workColor = PdfColor.fromHex('#059669');
-    final freeColor = PdfColor.fromHex('#6366F1');
-    final weekendColor = PdfColor.fromHex('#F59E0B');
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.all(24),
+        margin: pw.EdgeInsets.all(16), // Reduced margins
         build: (pw.Context context) {
           return [
-            // Clean Header matching your app style
+            // Compact Header
             pw.Container(
-              padding: pw.EdgeInsets.all(32),
+              padding: pw.EdgeInsets.all(16),
               decoration: pw.BoxDecoration(
                 color: lightGray,
-                borderRadius: pw.BorderRadius.circular(16),
+                borderRadius: pw.BorderRadius.circular(8),
               ),
               child: pw.Row(
                 children: [
-                  // Left side with accent
-                  pw.Container(
-                    width: 4,
-                    height: 40,
-                    decoration: pw.BoxDecoration(
-                      color: primaryRed,
-                      borderRadius: pw.BorderRadius.circular(2),
-                    ),
-                  ),
-                  pw.SizedBox(width: 16),
+                  pw.Container(width: 3, height: 24, color: primaryRed),
+                  pw.SizedBox(width: 12),
                   pw.Expanded(
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Text(
-                          'AUSTRIAN AIRLINES',
-                          style: pw.TextStyle(
-                            fontSize: 18,
-                            fontWeight: pw.FontWeight.bold,
-                            color: darkGray,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          'Dienstplan ${_getPDFHeaderText()}',
+                          'AUSTRIAN AIRLINES DIENSTPLAN',
                           style: pw.TextStyle(
                             fontSize: 14,
-                            color: mediumGray,
-                            fontWeight: pw.FontWeight.normal,
+                            fontWeight: pw.FontWeight.bold,
                           ),
+                        ),
+                        pw.Text(
+                          _getPDFHeaderText(),
+                          style: pw.TextStyle(fontSize: 11, color: mediumGray),
                         ),
                       ],
                     ),
                   ),
-                  // Date info
                   pw.Text(
-                    '${_formatDateForPDF(DateTime.now())}',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      color: mediumGray,
-                      fontWeight: pw.FontWeight.normal,
-                    ),
+                    '$workingDays Arbeitstage • ${totalHours}h',
+                    style: pw.TextStyle(fontSize: 10, color: mediumGray),
                   ),
                 ],
               ),
             ),
 
-            pw.SizedBox(height: 24),
+            pw.SizedBox(height: 12),
 
-            // Clean Statistics matching your app
-            pw.Container(
-              margin: pw.EdgeInsets.symmetric(horizontal: 0),
-              padding: pw.EdgeInsets.all(20),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.white,
-                borderRadius: pw.BorderRadius.circular(16),
-                border: pw.Border.all(color: lightBorder),
+            // Compact table
+            pw.Table(
+              border: pw.TableBorder.all(
+                color: PdfColor.fromHex('#E5E7EB'),
+                width: 0.5,
               ),
-              child: pw.Row(
-                children: [
-                  pw.Expanded(
-                    child: _buildStatColumn(
-                        '$workingDays', 'Arbeitstage', workColor),
-                  ),
-                  pw.Container(width: 1, height: 32, color: lightBorder),
-                  pw.Expanded(
-                    child: _buildStatColumn(
-                        '${totalDays - workingDays}', 'Freie Tage', freeColor),
-                  ),
-                  pw.Container(width: 1, height: 32, color: lightBorder),
-                  pw.Expanded(
-                    child: _buildStatColumn(
-                        '${totalHours}h', 'Stunden', weekendColor),
-                  ),
-                ],
-              ),
-            ),
+              columnWidths: {
+                0: pw.FixedColumnWidth(50), // Date
+                1: pw.FixedColumnWidth(40), // Day
+                2: pw.FlexColumnWidth(2.5), // Shifts
+                3: pw.FixedColumnWidth(40), // Hours
+              },
+              children: [
+                // Header
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: lightGray),
+                  children: [
+                    _buildCompactCell('DATUM', isHeader: true),
+                    _buildCompactCell('TAG', isHeader: true),
+                    _buildCompactCell('ZEITEN', isHeader: true),
+                    _buildCompactCell('STD', isHeader: true),
+                  ],
+                ),
+                // Data rows
+                ...List.generate(days.length, (index) {
+                  final day = days[index];
+                  final actualDate = startDate.add(Duration(days: index));
+                  final dayName = _getDayNameShort(actualDate.weekday);
+                  final isWeekend = actualDate.weekday >= 6;
 
-            pw.SizedBox(height: 32),
-
-            // Section header
-            pw.Container(
-              padding: pw.EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-              child: pw.Row(
-                children: [
-                  pw.Text(
-                    'KALENDER',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      color: darkGray,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  pw.Spacer(),
-                  pw.Text(
-                    '${days.length} Tage',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      color: mediumGray,
-                      fontWeight: pw.FontWeight.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Clean calendar-like layout
-            pw.Container(
-              decoration: pw.BoxDecoration(
-                color: PdfColors.white,
-                borderRadius: pw.BorderRadius.circular(16),
-                border: pw.Border.all(color: lightBorder),
-              ),
-              child: pw.Column(
-                children: [
-                  // Header
-                  pw.Container(
-                    padding: pw.EdgeInsets.all(16),
+                  return pw.TableRow(
                     decoration: pw.BoxDecoration(
-                      color: lightGray,
-                      borderRadius: pw.BorderRadius.only(
-                        topLeft: pw.Radius.circular(16),
-                        topRight: pw.Radius.circular(16),
-                      ),
+                      color: index % 2 == 0 ? PdfColors.white : lightGray,
                     ),
-                    child: pw.Row(
-                      children: [
-                        pw.Expanded(flex: 2, child: _buildTableHeader('DATUM')),
-                        pw.Expanded(flex: 2, child: _buildTableHeader('TAG')),
-                        pw.Expanded(
-                            flex: 3, child: _buildTableHeader('ZEITEN')),
-                        pw.Expanded(flex: 1, child: _buildTableHeader('STD')),
-                      ],
-                    ),
-                  ),
-
-                  // Days
-                  ...List.generate(days.length, (index) {
-                    final day = days[index];
-                    final actualDate = startDate.add(Duration(days: index));
-                    final dayName = _getDayNameShort(actualDate.weekday);
-                    final isWeekend = actualDate.weekday >= 6;
-
-                    return pw.Container(
-                      padding: pw.EdgeInsets.all(16),
-                      decoration: pw.BoxDecoration(
-                        color: index % 2 == 0 ? PdfColors.white : lightGray,
-                        border: pw.Border(
-                          bottom: index == days.length - 1
-                              ? pw.BorderSide.none
-                              : pw.BorderSide(color: lightBorder),
-                        ),
+                    children: [
+                      _buildCompactCell(
+                        '${actualDate.day}.${actualDate.month}.',
                       ),
-                      child: pw.Row(
-                        children: [
-                          // Date
-                          pw.Expanded(
-                            flex: 2,
-                            child: pw.Text(
-                              '${actualDate.day}.${actualDate.month}.${actualDate.year}',
-                              style: pw.TextStyle(
-                                fontSize: 12,
-                                fontWeight: pw.FontWeight.bold,
-                                color: darkGray,
-                              ),
-                            ),
-                          ),
-
-                          // Day
-                          pw.Expanded(
-                            flex: 2,
-                            child: pw.Text(
-                              dayName,
-                              style: pw.TextStyle(
-                                fontSize: 12,
-                                fontWeight: pw.FontWeight.normal,
-                                color: isWeekend ? weekendColor : mediumGray,
-                              ),
-                            ),
-                          ),
-
-                          // Shifts
-                          pw.Expanded(
-                            flex: 3,
-                            child: pw.Text(
-                              day.shifts.isNotEmpty
-                                  ? day.shifts
-                                      .map((s) =>
-                                          _formatShiftInterval(s.interval))
-                                      .join(', ')
-                                  : (isWeekend ? 'Wochenende' : 'Frei'),
-                              style: pw.TextStyle(
-                                fontSize: 11,
-                                fontWeight: pw.FontWeight.normal,
-                                color: day.shifts.isNotEmpty
-                                    ? darkGray
-                                    : mediumGray,
-                              ),
-                            ),
-                          ),
-
-                          // Hours
-                          pw.Expanded(
-                            flex: 1,
-                            child: pw.Text(
-                              day.hoursWorked != '0:00' ? day.hoursWorked : '—',
-                              style: pw.TextStyle(
-                                fontSize: 12,
-                                fontWeight: pw.FontWeight.bold,
-                                color: day.hoursWorked != '0:00'
-                                    ? darkGray
-                                    : mediumGray,
-                              ),
-                              textAlign: pw.TextAlign.center,
-                            ),
-                          ),
-                        ],
+                      _buildCompactCell(
+                        dayName,
+                        color: isWeekend ? PdfColor.fromHex('#F59E0B') : null,
                       ),
-                    );
-                  }),
-                ],
-              ),
+                      _buildCompactCell(
+                        day.shifts.isNotEmpty
+                            ? day.shifts
+                                  .map((s) => _formatShiftInterval(s.interval))
+                                  .join(', ')
+                            : (isWeekend ? 'WE' : 'Frei'),
+                        fontSize: 9,
+                      ),
+                      _buildCompactCell(
+                        day.hoursWorked != '0:00' ? day.hoursWorked : '—',
+                      ),
+                    ],
+                  );
+                }),
+              ],
             ),
 
-            pw.SizedBox(height: 32),
+            pw.SizedBox(height: 8),
 
-            // Clean footer
+            // Compact footer
             pw.Container(
-              padding: pw.EdgeInsets.all(16),
+              padding: pw.EdgeInsets.all(8),
               decoration: pw.BoxDecoration(
                 color: lightGray,
-                borderRadius: pw.BorderRadius.circular(12),
+                borderRadius: pw.BorderRadius.circular(4),
               ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Zeitraum: ${_formatDateForPDF(startDate)} — ${_formatDateForPDF(endDate.subtract(Duration(days: 1)))}',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      color: mediumGray,
-                      fontWeight: pw.FontWeight.normal,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    'Erstellt am ${_formatDateForPDF(DateTime.now())} • Austrian Airlines Planoviewer',
-                    style: pw.TextStyle(
-                      fontSize: 9,
-                      color: mediumGray,
-                    ),
-                  ),
-                ],
+              child: pw.Text(
+                'Erstellt ${_formatDateForPDF(DateTime.now())} • ${_formatDateForPDF(startDate)} - ${_formatDateForPDF(endDate.subtract(Duration(days: 1)))}',
+                style: pw.TextStyle(fontSize: 8, color: mediumGray),
               ),
             ),
           ];
@@ -605,42 +1072,253 @@ class PDFExportService {
     return pdf;
   }
 
-  // Helper method to build clean stat columns
-  pw.Widget _buildStatColumn(String value, String label, PdfColor color) {
-    return pw.Column(
-      children: [
-        pw.Text(
-          value,
-          style: pw.TextStyle(
-            fontSize: 20,
-            fontWeight: pw.FontWeight.bold,
-            color: color,
-          ),
+  pw.Widget _buildCompactCell(
+    String text, {
+    bool isHeader = false,
+    double? fontSize,
+    PdfColor? color,
+  }) {
+    return pw.Container(
+      padding: pw.EdgeInsets.all(isHeader ? 6 : 4),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: fontSize ?? (isHeader ? 9 : 10),
+          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
+          color:
+              color ??
+              (isHeader
+                  ? PdfColor.fromHex('#6B7280')
+                  : PdfColor.fromHex('#111827')),
         ),
-        pw.SizedBox(height: 4),
-        pw.Text(
-          label,
-          style: pw.TextStyle(
-            fontSize: 12,
-            color: PdfColor.fromHex('#6B7280'),
-            fontWeight: pw.FontWeight.normal,
-          ),
-        ),
-      ],
-    );
-  }
-
-  pw.Widget _buildTableHeader(String text) {
-    return pw.Text(
-      text,
-      style: pw.TextStyle(
-        fontSize: 11,
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColor.fromHex('#6B7280'),
-        letterSpacing: 0.5,
+        textAlign: isHeader ? pw.TextAlign.center : pw.TextAlign.left,
       ),
     );
   }
+
+  Future<pw.Document> _generateCalendarPDF(
+    List<WorkDay> days,
+    WorkRosterData rosterData,
+  ) async {
+    final pdf = pw.Document();
+
+    // Group days by month
+    final monthGroups = <int, List<MapEntry<int, WorkDay>>>{};
+    for (int i = 0; i < days.length; i++) {
+      final date = startDate.add(Duration(days: i));
+      monthGroups.putIfAbsent(date.month, () => []).add(MapEntry(i, days[i]));
+    }
+
+    for (final monthEntry in monthGroups.entries) {
+      pdf.addPage(_buildCalendarPage(monthEntry.key, monthEntry.value));
+    }
+
+    return pdf;
+  }
+
+  pw.Page _buildCalendarPage(
+    int month,
+    List<MapEntry<int, WorkDay>> monthDays,
+  ) {
+    final monthNames = [
+      '',
+      'JANUAR',
+      'FEBRUAR',
+      'MÄRZ',
+      'APRIL',
+      'MAI',
+      'JUNI',
+      'JULI',
+      'AUGUST',
+      'SEPTEMBER',
+      'OKTOBER',
+      'NOVEMBER',
+      'DEZEMBER',
+    ];
+
+    final firstDay = startDate.add(Duration(days: monthDays.first.key));
+    final year = firstDay.year;
+
+    // Create calendar grid
+    final firstDayOfMonth = DateTime(year, month, 1);
+    final lastDayOfMonth = DateTime(year, month + 1, 0);
+    final firstWeekday = firstDayOfMonth.weekday; // 1 = Monday
+
+    return pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.all(20),
+      build: (pw.Context context) {
+        return pw.Column(
+          children: [
+            // Month header
+            pw.Container(
+              padding: pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromHex('#F9FAFB'),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Row(
+                children: [
+                  pw.Container(
+                    width: 4,
+                    height: 24,
+                    color: PdfColor.fromHex('#E30613'),
+                  ),
+                  pw.SizedBox(width: 12),
+                  pw.Text(
+                    'AUSTRIAN AIRLINES • ${monthNames[month]} $year',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Calendar grid
+            pw.Expanded(
+              child: pw.Table(
+                border: pw.TableBorder.all(color: PdfColor.fromHex('#E5E7EB')),
+                children: [
+                  // Week header
+                  pw.TableRow(
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromHex('#F3F4F6'),
+                    ),
+                    children: ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO']
+                        .map(
+                          (day) => pw.Container(
+                            height: 30,
+                            padding: pw.EdgeInsets.all(4),
+                            child: pw.Center(
+                              child: pw.Text(
+                                day,
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+
+                  // Calendar weeks
+                  ..._buildCalendarWeeks(
+                    monthDays,
+                    firstDayOfMonth,
+                    lastDayOfMonth,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<pw.TableRow> _buildCalendarWeeks(
+    List<MapEntry<int, WorkDay>> monthDays,
+    DateTime firstDay,
+    DateTime lastDay,
+  ) {
+    final weeks = <pw.TableRow>[];
+    final dayMap = <int, WorkDay>{};
+
+    // Create lookup map
+    for (final entry in monthDays) {
+      final date = startDate.add(Duration(days: entry.key));
+      dayMap[date.day] = entry.value;
+    }
+
+    DateTime current = firstDay.subtract(Duration(days: firstDay.weekday - 1));
+
+    while (current.isBefore(lastDay.add(Duration(days: 7)))) {
+      final weekCells = <pw.Widget>[];
+
+      for (int i = 0; i < 7; i++) {
+        final cellDate = current.add(Duration(days: i));
+        final isCurrentMonth = cellDate.month == firstDay.month;
+        final workDay = isCurrentMonth ? dayMap[cellDate.day] : null;
+
+        weekCells.add(_buildCalendarCell(cellDate, workDay, isCurrentMonth));
+      }
+
+      weeks.add(pw.TableRow(children: weekCells));
+      current = current.add(Duration(days: 7));
+
+      if (current.isAfter(lastDay.add(Duration(days: 6)))) break;
+    }
+
+    return weeks;
+  }
+
+  pw.Widget _buildCalendarCell(
+    DateTime date,
+    WorkDay? workDay,
+    bool isCurrentMonth,
+  ) {
+    final isWeekend = date.weekday >= 6;
+    final hasWork = workDay?.shifts.isNotEmpty == true;
+
+    PdfColor bgColor = PdfColors.white;
+    if (!isCurrentMonth)
+      bgColor = PdfColor.fromHex('#F9FAFB');
+    else if (hasWork)
+      bgColor = PdfColor.fromHex('#DCFDF7');
+    else if (isWeekend)
+      bgColor = PdfColor.fromHex('#FEF3C7');
+
+    return pw.Container(
+      height: 80,
+      decoration: pw.BoxDecoration(color: bgColor),
+      padding: pw.EdgeInsets.all(4),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            '${date.day}',
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: isCurrentMonth
+                  ? PdfColor.fromHex('#111827')
+                  : PdfColor.fromHex('#9CA3AF'),
+            ),
+          ),
+          if (hasWork && workDay != null) ...[
+            pw.SizedBox(height: 2),
+            ...workDay.shifts
+                .take(2)
+                .map(
+                  (shift) => pw.Text(
+                    _formatShiftInterval(shift.interval),
+                    style: pw.TextStyle(
+                      fontSize: 7,
+                      color: PdfColor.fromHex('#059669'),
+                    ),
+                  ),
+                ),
+            if (workDay.shifts.length > 2)
+              pw.Text(
+                '...',
+                style: pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColor.fromHex('#6B7280'),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Helper method to build clean stat columns
 
   /// Format date for PDF display (DD. Month YYYY)
   String _formatDateForPDF(DateTime date) {
@@ -657,7 +1335,7 @@ class PDFExportService {
       'Sep',
       'Okt',
       'Nov',
-      'Dez'
+      'Dez',
     ];
     return '${date.day}. ${monthNames[date.month]} ${date.year}';
   }
@@ -701,8 +1379,10 @@ class PDFExportService {
       return timeString;
     }
 
-    final amPmRegex =
-        RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)', caseSensitive: false);
+    final amPmRegex = RegExp(
+      r'(\d{1,2}):(\d{2})\s*(AM|PM)',
+      caseSensitive: false,
+    );
     final match = amPmRegex.firstMatch(timeString);
 
     if (match != null) {
@@ -720,18 +1400,5 @@ class PDFExportService {
     }
 
     return timeString;
-  }
-
-  String _getDayNameGerman(int weekday) {
-    final days = [
-      'Montag',
-      'Dienstag',
-      'Mittwoch',
-      'Donnerstag',
-      'Freitag',
-      'Samstag',
-      'Sonntag'
-    ];
-    return days[weekday - 1]; // weekday is 1-based (1 = Monday)
   }
 }

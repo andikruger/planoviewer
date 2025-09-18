@@ -2,14 +2,18 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TransportService {
   /// Calculates when to leave home to arrive at work on time
   /// [workStartTime] should be in Vienna local time
   static Future<TransportInfo?> calculateDepartureTime(
-      DateTime workStartTime) async {
+    DateTime workStartTime,
+  ) async {
     try {
-      print('Calculating departure time for: $workStartTime'); // Debug
+      final prefs = await SharedPreferences.getInstance();
+      String? lat = prefs.getString('latitude');
+      String? lon = prefs.getString('longitude');
 
       // Convert Vienna local time to UTC for the API
       final utcArrivalTime = _convertViennaToUtc(workStartTime);
@@ -18,18 +22,14 @@ class TransportService {
           '${utcArrivalTime.year}-${utcArrivalTime.month.toString().padLeft(2, '0')}-${utcArrivalTime.day.toString().padLeft(2, '0')}T${utcArrivalTime.hour.toString().padLeft(2, '0')}%3A${utcArrivalTime.minute.toString().padLeft(2, '0')}%3A${utcArrivalTime.second.toString().padLeft(2, '0')}.${utcArrivalTime.millisecond.toString().padLeft(3, '0')}Z';
 
       final urlString =
-          'https://www.wienmobil.at//api/routes?origin=48.181867%2C16.344933&destination=vao%3A430470800&arrivalTime=$formattedArrivalTime&walkSpeed=normal&wheelchairAccessible=false&lineType=all&embed=trafficInformation&limit=3&types=&routeKey=public-transport';
+          'https://www.wienmobil.at//api/routes?origin=$lat%2C$lon&destination=vao%3A430470800&arrivalTime=$formattedArrivalTime&walkSpeed=normal&wheelchairAccessible=false&lineType=all&embed=trafficInformation&limit=3&types=&routeKey=public-transport';
 
       final uri = Uri.parse(urlString);
       final response = await http.get(uri);
 
-      print('Response status: ${response.statusCode}'); // Debug
-      print('Response body: ${response.body}'); // Debug
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['routes'] != null && data['routes'].isNotEmpty) {
-          print('Found ${data['routes'].length} routes'); // Debug
           return TransportInfo.fromJson(data['routes'][0]);
         } else {
           print('No routes found in response'); // Debug
@@ -90,7 +90,8 @@ class TransportService {
 
   /// Gets all available routes for the specified arrival time
   static Future<List<TransportInfo>?> getAllRoutes(
-      DateTime workStartTime) async {
+    DateTime workStartTime,
+  ) async {
     try {
       print('Calculating all routes for: $workStartTime'); // Debug
 
@@ -169,7 +170,8 @@ class TransportInfo {
     print('Raw departureTime: ${json['departureTime']}');
     print('Raw arrivalTime: ${json['arrivalTime']}');
 
-    final legs = (json['legs'] as List?)
+    final legs =
+        (json['legs'] as List?)
             ?.map((leg) => TransportLeg.fromJson(leg))
             .toList() ??
         [];
@@ -211,7 +213,8 @@ class TransportInfo {
     final formatted =
         '${viennaTime.hour.toString().padLeft(2, '0')}:${viennaTime.minute.toString().padLeft(2, '0')}';
     print(
-        'Departure: UTC ${departureTime} → Vienna ${viennaTime} → Formatted: $formatted');
+      'Departure: UTC ${departureTime} → Vienna ${viennaTime} → Formatted: $formatted',
+    );
     return formatted;
   }
 
@@ -221,7 +224,8 @@ class TransportInfo {
     final formatted =
         '${viennaTime.hour.toString().padLeft(2, '0')}:${viennaTime.minute.toString().padLeft(2, '0')}';
     print(
-        'Arrival: UTC ${arrivalTime} → Vienna ${viennaTime} → Formatted: $formatted');
+      'Arrival: UTC ${arrivalTime} → Vienna ${viennaTime} → Formatted: $formatted',
+    );
     return formatted;
   }
 
@@ -256,7 +260,8 @@ class TransportInfo {
 
     final offset = isDst ? 2 : 1;
     print(
-        'Vienna offset calculation: month=$month, day=$day, isDst=$isDst, offset=$offset');
+      'Vienna offset calculation: month=$month, day=$day, isDst=$isDst, offset=$offset',
+    );
     return offset;
   }
 

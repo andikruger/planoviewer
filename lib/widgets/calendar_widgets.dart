@@ -1,5 +1,7 @@
 // widgets/calendar_widgets.dart
 
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:flutter/material.dart';
 import '../models/calendar_model.dart';
 import '../utils/calendar_utils.dart';
@@ -335,7 +337,6 @@ class _CalendarDayWidgetState extends State<CalendarDayWidget>
   late AnimationController _pressController;
   late Animation<double> _pulseAnimation;
   late Animation<double> _scaleAnimation;
-  bool _isPressed = false;
 
   @override
   void initState() {
@@ -387,20 +388,17 @@ class _CalendarDayWidgetState extends State<CalendarDayWidget>
       onTapDown: widget.isPastDate
           ? null
           : (_) {
-              setState(() => _isPressed = true);
               _pressController.forward();
             },
       onTapUp: widget.isPastDate
           ? null
           : (_) {
-              setState(() => _isPressed = false);
               _pressController.reverse();
               widget.onTap?.call();
             },
       onTapCancel: widget.isPastDate
           ? null
           : () {
-              setState(() => _isPressed = false);
               _pressController.reverse();
             },
       onLongPress: hasContent ? widget.onLongPress : null,

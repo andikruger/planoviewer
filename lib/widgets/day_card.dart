@@ -1,6 +1,7 @@
 // widgets/day_card.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/roster_models.dart';
 import '../services/transport_service.dart';
 
@@ -33,8 +34,9 @@ class TimeConverter {
 
       // Handle 12-hour format with AM/PM
       final amPmRegex = RegExp(
-          r'(\d{1,2}):(\d{2})\s*(AM|PM|am|pm|a\.m\.|p\.m\.)',
-          caseSensitive: false);
+        r'(\d{1,2}):(\d{2})\s*(AM|PM|am|pm|a\.m\.|p\.m\.)',
+        caseSensitive: false,
+      );
       final match = amPmRegex.firstMatch(cleanTime);
 
       if (match != null) {
@@ -62,22 +64,51 @@ class TimeConverter {
   }
 }
 
-class DayCard extends StatelessWidget {
+class DayCard extends StatefulWidget {
   final WorkDay day;
   final int dayNumber;
   final DateTime? actualDate;
 
   const DayCard({
-    Key? key,
+    super.key,
     required this.day,
     required this.dayNumber,
     this.actualDate,
-  }) : super(key: key);
+  });
+
+  @override
+  State<DayCard> createState() => _DayCardState();
+}
+
+class _DayCardState extends State<DayCard> {
+  bool _hasCoordinates = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCoordinates();
+  }
+
+  Future<void> _checkCoordinates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lat = prefs.getDouble('roster_lat');
+      final lon = prefs.getDouble('roster_lon');
+
+      setState(() {
+        _hasCoordinates = lat != null && lon != null;
+      });
+    } catch (e) {
+      setState(() {
+        _hasCoordinates = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isWeekend = _isWeekend(dayNumber);
-    final dayName = _getDayName(dayNumber);
+    final isWeekend = _isWeekend(widget.dayNumber);
+    final dayName = _getDayName(widget.dayNumber);
     final dateText = _getDateText();
 
     return Container(
@@ -85,12 +116,12 @@ class DayCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: day.hasWork
+          color: widget.day.hasWork
               ? Color(0xFF111827).withOpacity(0.1)
               : Color(0xFFE5E7EB),
-          width: day.hasWork ? 2 : 1,
+          width: widget.day.hasWork ? 2 : 1,
         ),
-        boxShadow: day.hasWork
+        boxShadow: widget.day.hasWork
             ? [
                 BoxShadow(
                   color: Color(0xFF111827).withOpacity(0.08),
@@ -112,16 +143,20 @@ class DayCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: day.hasWork ? Color(0xFF111827) : Color(0xFFE5E7EB),
+                    color: widget.day.hasWork
+                        ? Color(0xFF111827)
+                        : Color(0xFFE5E7EB),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Text(
-                      '$dayNumber',
+                      '${widget.dayNumber}',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
-                        color: day.hasWork ? Colors.white : Color(0xFF6B7280),
+                        color: widget.day.hasWork
+                            ? Colors.white
+                            : Color(0xFF6B7280),
                       ),
                     ),
                   ),
@@ -148,7 +183,9 @@ class DayCard extends StatelessWidget {
                             SizedBox(width: 8),
                             Container(
                               padding: EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Color(0xFFF59E0B).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(6),
@@ -179,7 +216,8 @@ class DayCard extends StatelessWidget {
                 ),
 
                 // Hours badge
-                if (day.hoursWorked.isNotEmpty && day.hoursWorked != '0:00')
+                if (widget.day.hoursWorked.isNotEmpty &&
+                    widget.day.hoursWorked != '0:00')
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -192,7 +230,7 @@ class DayCard extends StatelessWidget {
                         Icon(Icons.schedule, size: 12, color: Colors.white),
                         SizedBox(width: 4),
                         Text(
-                          day.hoursWorked,
+                          widget.day.hoursWorked,
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
@@ -204,7 +242,9 @@ class DayCard extends StatelessWidget {
                   ),
 
                 // Transport button
-                if (day.hasWork && day.shifts.isNotEmpty) ...[
+                if (widget.day.hasWork &&
+                    widget.day.shifts.isNotEmpty &&
+                    _hasCoordinates) ...[
                   SizedBox(width: 8),
                   _buildTransportButton(context),
                 ],
@@ -213,99 +253,104 @@ class DayCard extends StatelessWidget {
           ),
 
           // Content section
-          if (day.shifts.isNotEmpty) ...[
+          if (widget.day.shifts.isNotEmpty) ...[
             Container(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Column(
-                children: day.shifts
-                    .map((shift) => Container(
-                          margin: EdgeInsets.only(bottom: 8),
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFFAFAFA),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _getShiftAccentColor(shift.name),
-                              width: 2,
+                children: widget.day.shifts
+                    .map(
+                      (shift) => Container(
+                        margin: EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFAFAFA),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _getShiftAccentColor(shift.name),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Shift indicator
+                            Container(
+                              width: 4,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: _getShiftAccentColor(shift.name),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              // Shift indicator
-                              Container(
-                                width: 4,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: _getShiftAccentColor(shift.name),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
 
-                              SizedBox(width: 16),
+                            SizedBox(width: 16),
 
-                              // Shift details
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 6,
-                                          height: 6,
-                                          decoration: BoxDecoration(
-                                            color: _getShiftAccentColor(
-                                                shift.name),
-                                            borderRadius:
-                                                BorderRadius.circular(3),
+                            // Shift details
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: _getShiftAccentColor(
+                                            shift.name,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            3,
                                           ),
                                         ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          _getShiftDisplayName(shift.name),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF6B7280),
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      _formatShiftInterval(shift.interval),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF111827),
                                       ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        _getShiftDisplayName(shift.name),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6B7280),
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    _formatShiftInterval(shift.interval),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF111827),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
+                            ),
 
-                              // Shift icon
-                              Container(
-                                padding: EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: _getShiftAccentColor(shift.name)
-                                      .withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  _getShiftIcon(shift.name),
-                                  size: 16,
-                                  color: _getShiftAccentColor(shift.name),
-                                ),
+                            // Shift icon
+                            Container(
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _getShiftAccentColor(
+                                  shift.name,
+                                ).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ],
-                          ),
-                        ))
+                              child: Icon(
+                                _getShiftIcon(shift.name),
+                                size: 16,
+                                color: _getShiftAccentColor(shift.name),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ),
-          ] else if (!day.hasWork) ...[
+          ] else if (!widget.day.hasWork) ...[
             Container(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Container(
@@ -349,7 +394,7 @@ class DayCard extends StatelessWidget {
   }
 
   String _getDateText() {
-    if (actualDate != null) {
+    if (widget.actualDate != null) {
       final monthNames = [
         '',
         'Januar',
@@ -363,9 +408,9 @@ class DayCard extends StatelessWidget {
         'September',
         'Oktober',
         'November',
-        'Dezember'
+        'Dezember',
       ];
-      return '${actualDate!.day}. ${monthNames[actualDate!.month]} ${actualDate!.year}';
+      return '${widget.actualDate!.day}. ${monthNames[widget.actualDate!.month]} ${widget.actualDate!.year}';
     }
 
     final now = DateTime.now();
@@ -382,20 +427,20 @@ class DayCard extends StatelessWidget {
       'September',
       'Oktober',
       'November',
-      'Dezember'
+      'Dezember',
     ];
 
     int estimatedMonth = now.month;
     int estimatedYear = now.year;
 
     if (now.day >= 15) {
-      if (dayNumber < 15 && now.day > 20) {
+      if (widget.dayNumber < 15 && now.day > 20) {
         estimatedMonth = now.month == 12 ? 1 : now.month + 1;
         if (now.month == 12) estimatedYear = now.year + 1;
       }
     }
 
-    return '$dayNumber. ${monthNames[estimatedMonth]} $estimatedYear';
+    return '${widget.dayNumber}. ${monthNames[estimatedMonth]} $estimatedYear';
   }
 
   Widget _buildTransportButton(BuildContext context) {
@@ -411,11 +456,7 @@ class DayCard extends StatelessWidget {
             print('Transport button tapped!');
             _showTransportInfo(context);
           },
-          child: Icon(
-            Icons.directions_transit,
-            color: Colors.white,
-            size: 18,
-          ),
+          child: Icon(Icons.directions_transit, color: Colors.white, size: 18),
         ),
       ),
     );
@@ -424,13 +465,13 @@ class DayCard extends StatelessWidget {
   void _showTransportInfo(BuildContext context) async {
     print('Transport button pressed!');
 
-    if (day.shifts.isEmpty) {
+    if (widget.day.shifts.isEmpty) {
       print('No shifts found');
       _showErrorDialog(context, 'Keine Schichten gefunden');
       return;
     }
 
-    final firstShift = day.shifts.first;
+    final firstShift = widget.day.shifts.first;
     print('First shift interval: ${firstShift.interval}');
 
     String startTimeStr;
@@ -465,28 +506,35 @@ class DayCard extends StatelessWidget {
         minute > 59) {
       print('Could not parse hour/minute or invalid time: $hour:$minute');
       _showErrorDialog(
-          context, 'Zeit konnte nicht geparst werden: $startTime24Hour');
+        context,
+        'Zeit konnte nicht geparst werden: $startTime24Hour',
+      );
       return;
     }
 
     DateTime shiftDate;
-    if (actualDate != null) {
-      shiftDate = actualDate!;
+    if (widget.actualDate != null) {
+      shiftDate = widget.actualDate!;
     } else {
       final now = DateTime.now();
       if (now.day >= 15) {
-        if (dayNumber < 15 && now.day > 20) {
-          shiftDate = DateTime(now.year, now.month + 1, dayNumber);
+        if (widget.dayNumber < 15 && now.day > 20) {
+          shiftDate = DateTime(now.year, now.month + 1, widget.dayNumber);
         } else {
-          shiftDate = DateTime(now.year, now.month, dayNumber);
+          shiftDate = DateTime(now.year, now.month, widget.dayNumber);
         }
       } else {
-        shiftDate = DateTime(now.year, now.month, dayNumber);
+        shiftDate = DateTime(now.year, now.month, widget.dayNumber);
       }
     }
 
-    final shiftStartTime =
-        DateTime(shiftDate.year, shiftDate.month, shiftDate.day, hour, minute);
+    final shiftStartTime = DateTime(
+      shiftDate.year,
+      shiftDate.month,
+      shiftDate.day,
+      hour,
+      minute,
+    );
     final workStartTime = shiftStartTime.subtract(Duration(minutes: 10));
     print('Shift starts at: $shiftStartTime');
     print('Want to arrive at: $workStartTime (10 minutes early)');
@@ -545,13 +593,14 @@ class DayCard extends StatelessWidget {
   }
 
   void _showTransportDialog(
-      BuildContext context, List<TransportInfo> routes, DateTime workStart) {
+    BuildContext context,
+    List<TransportInfo> routes,
+    DateTime workStart,
+  ) {
     showDialog(
       context: context,
-      builder: (context) => _TransportDialog(
-        routes: routes,
-        workStart: workStart,
-      ),
+      builder: (context) =>
+          _TransportDialog(routes: routes, workStart: workStart),
     );
   }
 
@@ -569,11 +618,7 @@ class DayCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.error_outline,
-                color: Color(0xFFDC2626),
-                size: 32,
-              ),
+              Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 32),
               SizedBox(height: 16),
               Text(
                 'Fehler',
@@ -586,10 +631,7 @@ class DayCard extends StatelessWidget {
               SizedBox(height: 8),
               Text(
                 message,
-                style: TextStyle(
-                  color: Color(0xFF6B7280),
-                  height: 1.4,
-                ),
+                style: TextStyle(color: Color(0xFF6B7280), height: 1.4),
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: 24),
@@ -622,7 +664,7 @@ class DayCard extends StatelessWidget {
       'Donnerstag',
       'Freitag',
       'Samstag',
-      'Sonntag'
+      'Sonntag',
     ];
     return days[(dayNumber - 1) % 7];
   }
@@ -663,9 +705,13 @@ class DayCard extends StatelessWidget {
       case 'Arbeitszeit':
         return 'DIENST';
       case 'RT':
-        return 'RUHEZEIT';
+        return 'RUHETAG';
       case 'TX':
         return 'BLOCKIERT';
+      case 'RTX':
+        return 'RUHETAG BLOCKIERT';
+      case 'FT':
+        return 'FEIERTAG';
       default:
         return shiftName.toUpperCase();
     }
@@ -702,10 +748,7 @@ class _TransportDialog extends StatefulWidget {
   final List<TransportInfo> routes;
   final DateTime workStart;
 
-  const _TransportDialog({
-    required this.routes,
-    required this.workStart,
-  });
+  const _TransportDialog({required this.routes, required this.workStart});
 
   @override
   _TransportDialogState createState() => _TransportDialogState();
@@ -788,8 +831,10 @@ class _TransportDialogState extends State<_TransportDialog> {
                       ),
                       if (widget.routes.length > 1)
                         Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Color(0xFFFAFAFA),
                             borderRadius: BorderRadius.circular(8),
@@ -909,9 +954,7 @@ class _TransportDialogState extends State<_TransportDialog> {
                   ),
                   child: Text(
                     'Schließen',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),

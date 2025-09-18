@@ -46,10 +46,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutQuart,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutQuart),
     );
 
     _slideAnimation = Tween<double>(begin: 30.0, end: 0.0).animate(
@@ -60,10 +57,7 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
 
     _selectionAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _selectionController,
-        curve: Curves.elasticOut,
-      ),
+      CurvedAnimation(parent: _selectionController, curve: Curves.elasticOut),
     );
 
     _animationController.forward();
@@ -72,7 +66,8 @@ class _CalendarScreenState extends State<CalendarScreen>
     print('Start date: ${widget.startDate}');
     print('End date: ${widget.endDate}');
     print(
-        'Date range: ${widget.endDate.difference(widget.startDate).inDays} days');
+      'Date range: ${widget.endDate.difference(widget.startDate).inDays} days',
+    );
   }
 
   @override
@@ -228,11 +223,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                     Color(0xFF059669),
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 32,
-                  color: Color(0xFFE5E7EB),
-                ),
+                Container(width: 1, height: 32, color: Color(0xFFE5E7EB)),
                 Expanded(
                   child: _buildStatItem(
                     '${visibleDays.length - workingDays}',
@@ -240,11 +231,7 @@ class _CalendarScreenState extends State<CalendarScreen>
                     Color(0xFF6366F1),
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 32,
-                  color: Color(0xFFE5E7EB),
-                ),
+                Container(width: 1, height: 32, color: Color(0xFFE5E7EB)),
                 Expanded(
                   child: _buildStatItem(
                     '${totalHours}h',
@@ -342,22 +329,24 @@ class _CalendarScreenState extends State<CalendarScreen>
               padding: EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
-                    .map((day) => Expanded(
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              day,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: (day == 'Sa' || day == 'So')
-                                    ? Color(0xFFF59E0B)
-                                    : Color(0xFF6B7280),
-                                fontSize: 12,
-                              ),
+                    .map(
+                      (day) => Expanded(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            day,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: (day == 'Sa' || day == 'So')
+                                  ? Color(0xFFF59E0B)
+                                  : Color(0xFF6B7280),
+                              fontSize: 12,
                             ),
                           ),
-                        ))
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ),
@@ -380,8 +369,9 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   Widget _buildDynamicCalendarGrid(List<WorkDay> days) {
     final startDate = widget.startDate;
-    final endDate =
-        widget.endDate.subtract(Duration(days: 1)); // Make inclusive
+    final endDate = widget.endDate.subtract(
+      Duration(days: 1),
+    ); // Make inclusive
 
     // Calculate the calendar start (Monday of the week containing start date)
     final firstWeekday = startDate.weekday; // 1 = Monday, 7 = Sunday
@@ -396,11 +386,21 @@ class _CalendarScreenState extends State<CalendarScreen>
     print('Calendar start: $calendarStart');
 
     return _buildCalendarWithDividers(
-        calendarStart, startDate, endDate, days, weeksNeeded);
+      calendarStart,
+      startDate,
+      endDate,
+      days,
+      weeksNeeded,
+    );
   }
 
-  Widget _buildCalendarWithDividers(DateTime calendarStart, DateTime startDate,
-      DateTime endDate, List<WorkDay> days, int weeksNeeded) {
+  Widget _buildCalendarWithDividers(
+    DateTime calendarStart,
+    DateTime startDate,
+    DateTime endDate,
+    List<WorkDay> days,
+    int weeksNeeded,
+  ) {
     List<Widget> calendarRows = [];
     final monthNames = [
       '',
@@ -415,7 +415,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       'September',
       'Oktober',
       'November',
-      'Dezember'
+      'Dezember',
     ];
 
     int? lastMonth;
@@ -431,7 +431,7 @@ class _CalendarScreenState extends State<CalendarScreen>
         final cellDate = calendarStart.add(Duration(days: week * 7 + day));
         final isInRange =
             cellDate.isAfter(startDate.subtract(Duration(days: 1))) &&
-                cellDate.isBefore(endDate.add(Duration(days: 1)));
+            cellDate.isBefore(endDate.add(Duration(days: 1)));
 
         if (isInRange) {
           if (lastMonth != null && cellDate.month != lastMonth) {
@@ -450,7 +450,7 @@ class _CalendarScreenState extends State<CalendarScreen>
           final cellDate = calendarStart.add(Duration(days: week * 7 + day));
           final isInRange =
               cellDate.isAfter(startDate.subtract(Duration(days: 1))) &&
-                  cellDate.isBefore(endDate.add(Duration(days: 1)));
+              cellDate.isBefore(endDate.add(Duration(days: 1)));
 
           if (isInRange && cellDate.month != lastMonth) {
             calendarRows.add(_buildMonthDivider(monthNames[cellDate.month]));
@@ -465,23 +465,25 @@ class _CalendarScreenState extends State<CalendarScreen>
         final cellDate = calendarStart.add(Duration(days: week * 7 + day));
         final isInRange =
             cellDate.isAfter(startDate.subtract(Duration(days: 1))) &&
-                cellDate.isBefore(endDate.add(Duration(days: 1)));
+            cellDate.isBefore(endDate.add(Duration(days: 1)));
 
         if (!isInRange) {
           // Empty cell for dates outside our range
-          weekCells.add(Container(
-            height: 64, // Increased height for time display
-            child: Center(
-              child: Text(
-                '${cellDate.day}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFFE5E7EB),
-                  fontWeight: FontWeight.w500,
+          weekCells.add(
+            Container(
+              height: 64, // Increased height for time display
+              child: Center(
+                child: Text(
+                  '${cellDate.day}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFFE5E7EB),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
-          ));
+          );
           continue;
         }
 
@@ -495,39 +497,46 @@ class _CalendarScreenState extends State<CalendarScreen>
         }
 
         final isWeekend = cellDate.weekday >= 6; // 6 = Saturday, 7 = Sunday
-        final isSelected = selectedDate != null &&
+        final isSelected =
+            selectedDate != null &&
             selectedDate!.year == cellDate.year &&
             selectedDate!.month == cellDate.month &&
             selectedDate!.day == cellDate.day;
 
-        weekCells
-            .add(_buildCalendarDay(cellDate, dayData, isWeekend, isSelected));
+        weekCells.add(
+          _buildCalendarDay(cellDate, dayData, isWeekend, isSelected),
+        );
       }
 
       // Add the week row
-      calendarRows.add(Container(
-        margin: EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: weekCells
-              .map((cell) => Expanded(
-                      child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 2),
-                    child: cell,
-                  )))
-              .toList(),
+      calendarRows.add(
+        Container(
+          margin: EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: weekCells
+                .map(
+                  (cell) => Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 2),
+                      child: cell,
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
         ),
-      ));
+      );
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        children: calendarRows,
-      ),
-    );
+    return SingleChildScrollView(child: Column(children: calendarRows));
   }
 
   Widget _buildCalendarDay(
-      DateTime cellDate, WorkDay dayData, bool isWeekend, bool isSelected) {
+    DateTime cellDate,
+    WorkDay dayData,
+    bool isWeekend,
+    bool isSelected,
+  ) {
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -618,32 +627,46 @@ class _CalendarScreenState extends State<CalendarScreen>
       // Convert to 24-hour format first
       final formatted24h = _formatShiftInterval(interval);
 
-      // Extract compact time from "HH:MM-HH:MM" format
-      final regex = RegExp(r'(\d{2}):\d{2}[^\d]*(\d{2}):\d{2}');
+      // Extract time with minutes from "HH:MM-HH:MM" format
+      final regex = RegExp(r'(\d{2}):(\d{2})[^\d]*(\d{2}):(\d{2})');
       final match = regex.firstMatch(formatted24h);
 
       if (match != null) {
         final startHour = match.group(1);
-        final endHour = match.group(2);
-        return '$startHour-$endHour';
+        final startMin = match.group(2);
+        final endHour = match.group(3);
+        final endMin = match.group(4);
+
+        // Show minutes only if they're not :00
+        final startTime = startMin == '00' ? startHour : '$startHour:$startMin';
+        final endTime = endMin == '00' ? endHour : '$endHour:$endMin';
+
+        return '$startTime-$endTime';
       }
 
-      // Fallback: try to extract just hours from any format
-      final hourRegex = RegExp(r'(\d{1,2})');
-      final matches = hourRegex.allMatches(formatted24h).toList();
+      // Fallback: try to extract hours and minutes from any format
+      final timeRegex = RegExp(r'(\d{1,2}):(\d{2})');
+      final matches = timeRegex.allMatches(formatted24h).toList();
       if (matches.length >= 2) {
-        final startHour = matches[0].group(0)!.padLeft(2, '0');
-        final endHour = matches[1].group(0)!.padLeft(2, '0');
-        return '$startHour-$endHour';
+        final startHour = matches[0].group(1)!.padLeft(2, '0');
+        final startMin = matches[0].group(2)!;
+        final endHour = matches[1].group(1)!.padLeft(2, '0');
+        final endMin = matches[1].group(2)!;
+
+        // Show minutes only if they're not :00
+        final startTime = startMin == '00' ? startHour : '$startHour:$startMin';
+        final endTime = endMin == '00' ? endHour : '$endHour:$endMin';
+
+        return '$startTime-$endTime';
       }
 
-      // Last resort: return first 5 characters
-      return formatted24h.length > 5
-          ? formatted24h.substring(0, 5)
+      // Last resort: return first 8 characters to accommodate longer format
+      return formatted24h.length > 8
+          ? formatted24h.substring(0, 8)
           : formatted24h;
     } catch (e) {
       print('Error extracting compact time from "$interval": $e');
-      return interval.length > 5 ? interval.substring(0, 5) : interval;
+      return interval.length > 8 ? interval.substring(0, 8) : interval;
     }
   }
 
@@ -692,12 +715,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       margin: EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 1,
-              color: Color(0xFFE5E7EB),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: Color(0xFFE5E7EB))),
           Container(
             margin: EdgeInsets.symmetric(horizontal: 16),
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -715,12 +733,7 @@ class _CalendarScreenState extends State<CalendarScreen>
               ),
             ),
           ),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: Color(0xFFE5E7EB),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: Color(0xFFE5E7EB))),
         ],
       ),
     );
@@ -750,7 +763,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       'September',
       'Oktober',
       'November',
-      'Dezember'
+      'Dezember',
     ];
 
     return AnimatedBuilder(
@@ -844,57 +857,59 @@ class _CalendarScreenState extends State<CalendarScreen>
                   if (day.shifts.isNotEmpty) ...[
                     SizedBox(height: 16),
                     ...day.shifts
-                        .map((shift) => Container(
-                              margin: EdgeInsets.only(bottom: 8),
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: _getShiftAccentColor(shift.name),
-                                  width: 2,
+                        .map(
+                          (shift) => Container(
+                            margin: EdgeInsets.only(bottom: 8),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _getShiftAccentColor(shift.name),
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: _getShiftAccentColor(shift.name),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
                                 ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 4,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: _getShiftAccentColor(shift.name),
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _getShiftDisplayName(shift.name),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF6B7280),
-                                            letterSpacing: 0.5,
-                                          ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _getShiftDisplayName(shift.name),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6B7280),
+                                          letterSpacing: 0.5,
                                         ),
-                                        SizedBox(height: 2),
-                                        Text(
-                                          _formatShiftInterval(shift.interval),
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF111827),
-                                          ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        _formatShiftInterval(shift.interval),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF111827),
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ))
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
                         .toList(),
                   ] else if (!day.hasWork) ...[
                     SizedBox(height: 16),
@@ -980,34 +995,40 @@ class _CalendarScreenState extends State<CalendarScreen>
   List<WorkDay> _getVisibleDays(List<WorkDay> allDays) {
     final now = DateTime.now();
 
+    // Get the actual start and end months from the roster data
+    final rosterStartMonth = widget.startDate.month;
+    final rosterStartYear = widget.startDate.year;
+
     if (now.day < 15) {
-      // Before 15th: Show only current month
-      final currentMonthDays = <WorkDay>[];
+      // Before 15th: Show only the first month of the roster period
+      final firstMonthDays = <WorkDay>[];
 
       for (int i = 0; i < allDays.length; i++) {
         final dayDate = widget.startDate.add(Duration(days: i));
-        if (dayDate.month == now.month && dayDate.year == now.year) {
-          currentMonthDays.add(allDays[i]);
+        if (dayDate.month == rosterStartMonth &&
+            dayDate.year == rosterStartYear) {
+          firstMonthDays.add(allDays[i]);
         }
       }
 
-      print('Filtering to current month only: ${currentMonthDays.length} days');
-      return currentMonthDays;
+      print(
+        'Filtering to first roster month (${rosterStartMonth}): ${firstMonthDays.length} days',
+      );
+      return firstMonthDays;
     } else {
-      // 15th and after: Show all days (current + next month)
-      print('Showing all days: ${allDays.length} days');
+      // 15th and after: Show all days in the roster period
+      print('Showing all roster days: ${allDays.length} days');
       return allDays;
     }
   }
 
-  /// Get header text based on visible date range
   String _getHeaderText() {
     final now = DateTime.now();
     final monthNames = [
       '',
-      'JANUAR',
+      'JANUAR', // or 'JANUAR' for display, 'Januar' for calendar
       'FEBRUAR',
-      'MÄRZ',
+      'MAERZ',
       'APRIL',
       'MAI',
       'JUNI',
@@ -1016,22 +1037,22 @@ class _CalendarScreenState extends State<CalendarScreen>
       'SEPTEMBER',
       'OKTOBER',
       'NOVEMBER',
-      'DEZEMBER'
+      'DEZEMBER',
     ];
 
-    if (now.day < 15) {
-      // Before 15th: Show only current month
-      return 'KALENDER ${monthNames[now.month]}';
-    } else {
-      // 15th and after: Show current + next month range
-      final startMonth = monthNames[widget.startDate.month];
-      final endMonth =
-          monthNames[widget.endDate.subtract(Duration(days: 1)).month];
+    final rosterStartMonth = widget.startDate.month;
+    final rosterEndDate = widget.endDate.subtract(const Duration(days: 1));
+    final rosterEndMonth = rosterEndDate.month;
 
-      if (startMonth == endMonth) {
-        return 'KALENDER $startMonth';
+    if (now.day < 15) {
+      // Before 15th: Show only first month of roster
+      return 'DIENSTPLAN ${monthNames[rosterStartMonth]}'; // or 'KALENDER' for calendar screen
+    } else {
+      // 15th and after: Show full range
+      if (rosterStartMonth == rosterEndMonth) {
+        return 'DIENSTPLAN ${monthNames[rosterStartMonth]}';
       } else {
-        return 'KALENDER $startMonth-$endMonth';
+        return 'DIENSTPLAN ${monthNames[rosterStartMonth]}-${monthNames[rosterEndMonth]}';
       }
     }
   }
@@ -1080,8 +1101,10 @@ class _CalendarScreenState extends State<CalendarScreen>
       return timeString;
     }
 
-    final amPmRegex =
-        RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)', caseSensitive: false);
+    final amPmRegex = RegExp(
+      r'(\d{1,2}):(\d{2})\s*(AM|PM)',
+      caseSensitive: false,
+    );
     final match = amPmRegex.firstMatch(timeString);
 
     if (match != null) {
@@ -1109,7 +1132,7 @@ class _CalendarScreenState extends State<CalendarScreen>
       'Donnerstag',
       'Freitag',
       'Samstag',
-      'Sonntag'
+      'Sonntag',
     ];
     return days[weekday - 1]; // weekday is 1-based
   }
@@ -1153,9 +1176,13 @@ class _CalendarScreenState extends State<CalendarScreen>
       case 'Arbeitszeit':
         return 'DIENST';
       case 'RT':
-        return 'RUHEZEIT';
+        return 'RUHETAG';
       case 'TX':
         return 'BLOCKIERT';
+      case 'RTX':
+        return 'RUHETAG BLOCKIERT';
+      case 'FT':
+        return 'FEIERTAG';
       default:
         return shiftName.toUpperCase();
     }

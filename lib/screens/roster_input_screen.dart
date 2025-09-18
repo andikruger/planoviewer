@@ -27,45 +27,52 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   late Animation<double> _pulseAnimation;
+  final TextEditingController _addressController = TextEditingController();
+  bool _hasAddress = false;
+  bool _isGeocodingLoading = false;
+  String? _geocodingError;
+  Map<String, double>? _coordinates; // {lat: double, lon: double}
+  static const String _tomtomApiKey = 'dwCWaJkaAJk8CBe8UoyMpWGuhWzn4t9q';
+  static const String _tomtomBaseUrl =
+      'https://api.tomtom.com/search/2/geocode';
 
   // SharedPreferences keys
   static const String _rosterDataKey = 'saved_roster';
   static const String _apiTokenKey = 'api_token';
+  bool _preventAutoNavigation = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final route = ModalRoute.of(context);
+      if (route != null && route.settings.arguments == 'prevent_auto_nav') {
+        _preventAutoNavigation = true;
+      }
+    });
     _jsonController.addListener(_onTextChanged);
+    _addressController.addListener(_onAddressChanged);
 
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
 
     _pulseController = AnimationController(
-      duration: Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutQuart,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutQuart),
     );
 
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.elasticOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
     );
 
     _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
-      CurvedAnimation(
-        parent: _pulseController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
     _initializeRosterData();
@@ -77,6 +84,9 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     _jsonController.dispose();
     _animationController.dispose();
     _pulseController.dispose();
+    _addressController.removeListener(_onAddressChanged);
+    _addressController.dispose();
+
     super.dispose();
   }
 
@@ -84,6 +94,16 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     setState(() {
       _hasText = _jsonController.text.trim().isNotEmpty;
       _errorMessage = null;
+    });
+  }
+
+  void _onAddressChanged() {
+    setState(() {
+      _hasAddress = _addressController.text.trim().isNotEmpty;
+      _geocodingError = null;
+      if (!_hasAddress) {
+        _coordinates = null;
+      }
     });
   }
 
@@ -102,9 +122,10 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       _currentApiToken = apiToken;
 
-      if (savedRosterData != null && savedRosterData.isNotEmpty) {
-        print('Found saved roster data, navigating to display screen');
-
+      // Only auto-navigate if not explicitly prevented
+      if (savedRosterData != null &&
+          savedRosterData.isNotEmpty &&
+          !_preventAutoNavigation) {
         final jsonData = json.decode(savedRosterData);
         final rosterData = WorkRosterData.fromJson(jsonData);
 
@@ -118,7 +139,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
           endDate = DateTime.parse(endDateStr);
         }
 
-        await Future.delayed(Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 500));
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -126,22 +147,31 @@ class _RosterInputScreenState extends State<RosterInputScreen>
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
                   RosterDisplayScreen(
-                rosterData: rosterData,
-                startDate: startDate,
-                endDate: endDate,
-              ),
+                    rosterData: rosterData,
+                    startDate: startDate,
+                    endDate: endDate,
+                  ),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
+                    return FadeTransition(opacity: animation, child: child);
+                  },
             ),
           );
         }
         return;
       }
 
-      if (apiToken != null && apiToken.isNotEmpty) {
-        print('No saved data found, attempting to fetch from API');
+      // If we have saved data but prevented auto-nav, show it in the text field
+      if (savedRosterData != null &&
+          savedRosterData.isNotEmpty &&
+          _preventAutoNavigation) {
+        setState(() {
+          _jsonController.text = savedRosterData;
+          _hasText = true;
+        });
+      }
+
+      if (apiToken != null && apiToken.isNotEmpty && !_preventAutoNavigation) {
         await _fetchRosterDataFromAPI();
       } else {
         setState(() {
@@ -150,12 +180,106 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         _animationController.forward();
       }
     } catch (e) {
-      print('Error during initialization: $e');
       setState(() {
         _errorMessage = 'Fehler beim Laden der Daten: ${e.toString()}';
         _isInitializing = false;
       });
       _animationController.forward();
+    }
+  }
+
+  Future<void> _showResetDialog() async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFAFAFA),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text(
+          'Alle Daten zurücksetzen?',
+          style: TextStyle(
+            color: Color(0xFF111827),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: const Text(
+          'Alle gespeicherten Daten (Dienstplan, API-Token, Adressen) werden dauerhaft gelöscht.',
+          style: TextStyle(color: Color(0xFF6B7280), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Abbrechen',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _resetAllData();
+            },
+            child: const Text(
+              'Zurücksetzen',
+              style: TextStyle(
+                color: Color(0xFFDC2626),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _resetAllData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear all app data
+      await prefs.remove(_rosterDataKey);
+      await prefs.remove(_apiTokenKey);
+      await prefs.remove('roster_start_date');
+      await prefs.remove('roster_end_date');
+      await prefs.remove('roster_lat');
+      await prefs.remove('roster_lon');
+      await prefs.remove('roster_address');
+
+      setState(() {
+        _jsonController.clear();
+        _addressController.clear(); // if you added address input
+        _hasText = false;
+        _hasAddress = false; // if you added address input
+        _errorMessage = null;
+        _geocodingError = null; // if you added address input
+        _currentApiToken = null;
+        _coordinates = null; // if you added address input
+        _preventAutoNavigation = false; // reset the flag
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.refresh, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Alle Daten wurden zurückgesetzt'),
+            ],
+          ),
+          backgroundColor: const Color(0xFF111827),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Zurücksetzen: $e'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
     }
   }
 
@@ -165,7 +289,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final apiToken = prefs.getString(_apiTokenKey);
 
       if (apiToken == null || apiToken.isEmpty) {
-        print('No API token available in SharedPreferences');
         setState(() {
           _isInitializing = false;
           _errorMessage = 'Kein API-Token verfügbar. Bitte Token eingeben.';
@@ -183,19 +306,17 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final startDate = DateTime.parse(startDateStr);
       final endDate = DateTime.parse(endDateStr);
 
-      print('Fetching roster data for period: $startDateStr to $endDateStr');
-      print('Using API token: ${apiToken.substring(0, 8)}...');
-
-      final response = await http.get(
-        Uri.parse(
-            'https://austrian.plano-wfm.cloud/myplanoservice/api/monthjournal/data?start=$startDateStr&end=$endDateStr'),
-        headers: {
-          'Authorization': 'Bearer $apiToken',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(Duration(seconds: 30));
-
-      print('API response status: ${response.statusCode}');
+      final response = await http
+          .get(
+            Uri.parse(
+              'https://austrian.plano-wfm.cloud/myplanoservice/api/monthjournal/data?start=$startDateStr&end=$endDateStr',
+            ),
+            headers: {
+              'Authorization': 'Bearer $apiToken',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body);
@@ -204,40 +325,41 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         await _saveRosterData(response.body);
         await _saveDateRange(startDate, endDate);
 
-        print('Successfully fetched and saved roster data');
-
         if (mounted) {
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
                   RosterDisplayScreen(
-                rosterData: rosterData,
-                startDate: startDate,
-                endDate: endDate,
-              ),
+                    rosterData: rosterData,
+                    startDate: startDate,
+                    endDate: endDate,
+                  ),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeInOutCubic,
-                  )),
-                  child: child,
-                );
-              },
+                    return SlideTransition(
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeInOutCubic,
+                            ),
+                          ),
+                      child: child,
+                    );
+                  },
             ),
           );
         }
       } else {
         throw Exception(
-            'API returned status ${response.statusCode}: ${response.body}');
+          'API returned status ${response.statusCode}: ${response.body}',
+        );
       }
     } catch (e) {
-      print('Error fetching roster data from API: $e');
       setState(() {
         _errorMessage = 'Fehler beim Laden der API-Daten: ${e.toString()}';
         _isLoading = false;
@@ -247,21 +369,83 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
   }
 
+  Future<void> _geocodeAddress() async {
+    final address = _addressController.text.trim();
+    if (address.isEmpty) return;
+
+    setState(() {
+      _isGeocodingLoading = true;
+      _geocodingError = null;
+    });
+
+    try {
+      final encodedAddress = Uri.encodeComponent(address);
+      final url = '$_tomtomBaseUrl/$encodedAddress.json?key=$_tomtomApiKey';
+
+      final response = await http
+          .get(Uri.parse(url), headers: {'Content-Type': 'application/json'})
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        final results = jsonData['results'] as List;
+
+        if (results.isNotEmpty) {
+          final position = results[0]['position'];
+          setState(() {
+            _coordinates = {
+              'lat': position['lat'].toDouble(),
+              'lon': position['lon'].toDouble(),
+            };
+            _isGeocodingLoading = false;
+          });
+
+          // Save coordinates to SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setDouble('latitude', _coordinates!['lat']!);
+          await prefs.setDouble('longitude', _coordinates!['lon']!);
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✓ Adresse gefunden: ${_coordinates!['lat']!.toStringAsFixed(4)}, ${_coordinates!['lon']!.toStringAsFixed(4)}',
+              ),
+              backgroundColor: const Color(0xFF059669),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        } else {
+          setState(() {
+            _geocodingError = 'Keine Ergebnisse für diese Adresse gefunden';
+            _isGeocodingLoading = false;
+          });
+        }
+      } else {
+        throw Exception('API Error: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        _geocodingError = 'Fehler bei der Adresssuche: ${e.toString()}';
+        _isGeocodingLoading = false;
+      });
+    }
+  }
+
   (String, String) _getDateRange(DateTime now) {
     final String startDateStr;
     final String endDateStr;
 
-    if (now.day < 30) {
+    if (now.day < 20) {
       startDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
       endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
-      print(
-          'Before 15th - fetching current month only: ${_getMonthName(now.month)}');
     } else {
       startDateStr = _formatDate(DateTime(now.year, now.month, 1));
       endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
-      final nextMonth = now.month == 12 ? 1 : now.month + 1;
-      print(
-          'After 15th - fetching current and next month: ${_getMonthName(now.month)} + ${_getMonthName(nextMonth)}');
     }
 
     return (startDateStr, endDateStr);
@@ -272,11 +456,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('roster_start_date', startDate.toIso8601String());
       await prefs.setString('roster_end_date', endDate.toIso8601String());
-      print(
-          'Date range saved: ${startDate.toIso8601String()} to ${endDate.toIso8601String()}');
-    } catch (e) {
-      print('Error saving date range: $e');
-    }
+    } catch (e) {}
   }
 
   void _parseAndNavigate() {
@@ -305,19 +485,22 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
               RosterDisplayScreen(
-            rosterData: rosterData,
-            startDate: startDate,
-            endDate: endDate,
-          ),
+                rosterData: rosterData,
+                startDate: startDate,
+                endDate: endDate,
+              ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1.0, 0.0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeInOutCubic,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeInOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },
@@ -328,25 +511,6 @@ class _RosterInputScreenState extends State<RosterInputScreen>
         _errorMessage = 'Ungültiges JSON-Format: ${e.toString()}';
       });
     }
-  }
-
-  String _getMonthName(int month) {
-    const monthNames = [
-      '',
-      'Januar',
-      'Februar',
-      'März',
-      'April',
-      'Mai',
-      'Juni',
-      'Juli',
-      'August',
-      'September',
-      'Oktober',
-      'November',
-      'Dezember'
-    ];
-    return monthNames[month];
   }
 
   Future<void> _showTokenDialog({bool isEdit = false}) async {
@@ -370,12 +534,13 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✓ API-Token erfolgreich gespeichert'),
-          backgroundColor: Color(0xFF111827),
+          content: const Text('✓ API-Token erfolgreich gespeichert'),
+          backgroundColor: const Color(0xFF111827),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
         ),
       );
 
@@ -392,9 +557,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
       setState(() {
         _currentApiToken = token;
       });
-      print('API token saved to SharedPreferences');
     } catch (e) {
-      print('Error saving API token: $e');
       throw Exception('Fehler beim Speichern des Tokens');
     }
   }
@@ -409,17 +572,16 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('API-Token entfernt'),
-          backgroundColor: Color(0xFF111827),
+          content: const Text('API-Token entfernt'),
+          backgroundColor: const Color(0xFF111827),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
         ),
       );
-    } catch (e) {
-      print('Error clearing API token: $e');
-    }
+    } catch (e) {}
   }
 
   String _formatDate(DateTime date) {
@@ -430,9 +592,14 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_rosterDataKey, jsonData);
-      print('Roster data saved to SharedPreferences');
+
+      // Save coordinates if available
+      if (_coordinates != null) {
+        await prefs.setDouble('roster_lat', _coordinates!['lat']!);
+        await prefs.setDouble('roster_lon', _coordinates!['lon']!);
+        await prefs.setString('roster_address', _addressController.text.trim());
+      }
     } catch (e) {
-      print('Error saving roster data: $e');
       throw Exception('Fehler beim Speichern der Daten');
     }
   }
@@ -450,20 +617,20 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Daten gelöscht'),
-          backgroundColor: Color(0xFF111827),
+          content: const Text('Daten gelöscht'),
+          backgroundColor: const Color(0xFF111827),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
         ),
       );
     } catch (e) {
-      print('Error clearing data: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Fehler beim Löschen: $e'),
-          backgroundColor: Color(0xFFDC2626),
+          backgroundColor: const Color(0xFFDC2626),
         ),
       );
     }
@@ -490,36 +657,38 @@ class _RosterInputScreenState extends State<RosterInputScreen>
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✓ Eingefügt'),
-            backgroundColor: Color(0xFF111827),
+            content: const Text('✓ Eingefügt'),
+            backgroundColor: const Color(0xFF111827),
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Zwischenablage ist leer'),
-            backgroundColor: Color(0xFF111827),
+            content: const Text('Zwischenablage ist leer'),
+            backgroundColor: const Color(0xFF111827),
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
     } catch (e) {
-      print('Error pasting from clipboard: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fehler beim Einfügen'),
-          backgroundColor: Color(0xFFDC2626),
+          content: const Text('Fehler beim Einfügen'),
+          backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
         ),
       );
     }
@@ -529,26 +698,23 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Color(0xFFFAFAFA),
+        backgroundColor: const Color(0xFFFAFAFA),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
+        title: const Text(
           'Token entfernen?',
           style: TextStyle(
             color: Color(0xFF111827),
             fontWeight: FontWeight.w600,
           ),
         ),
-        content: Text(
+        content: const Text(
           'Der API-Token wird dauerhaft entfernt und automatische Updates sind nicht mehr möglich.',
-          style: TextStyle(
-            color: Color(0xFF6B7280),
-            height: 1.5,
-          ),
+          style: TextStyle(color: Color(0xFF6B7280), height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(
+            child: const Text(
               'Abbrechen',
               style: TextStyle(color: Color(0xFF6B7280)),
             ),
@@ -558,7 +724,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
               Navigator.of(context).pop();
               _clearApiToken();
             },
-            child: Text(
+            child: const Text(
               'Entfernen',
               style: TextStyle(
                 color: Color(0xFFDC2626),
@@ -575,7 +741,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
   Widget build(BuildContext context) {
     if (_isInitializing) {
       return Scaffold(
-        backgroundColor: Color(0xFFFAFAFA),
+        backgroundColor: const Color(0xFFFAFAFA),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -586,18 +752,18 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: Color(0xFF111827),
+                    color: const Color(0xFF111827),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.flight,
                     size: 40,
                     color: Colors.white,
                   ),
                 ),
               ),
-              SizedBox(height: 32),
-              SizedBox(
+              const SizedBox(height: 32),
+              const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
@@ -605,8 +771,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF111827)),
                 ),
               ),
-              SizedBox(height: 16),
-              Text(
+              const SizedBox(height: 16),
+              const Text(
                 'Lade Dienstplan...',
                 style: TextStyle(
                   color: Color(0xFF6B7280),
@@ -621,11 +787,11 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     }
 
     return Scaffold(
-      backgroundColor: Color(0xFFFAFAFA),
+      backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: ScaleTransition(
@@ -635,7 +801,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                   children: [
                     // Minimalist Header
                     Container(
-                      margin: EdgeInsets.only(bottom: 48),
+                      margin: const EdgeInsets.only(bottom: 48),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -645,12 +811,12 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                                 width: 6,
                                 height: 32,
                                 decoration: BoxDecoration(
-                                  color: Color(0xFFE30613),
+                                  color: const Color(0xFFE30613),
                                   borderRadius: BorderRadius.circular(3),
                                 ),
                               ),
-                              SizedBox(width: 16),
-                              Column(
+                              const SizedBox(width: 16),
+                              const Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
@@ -682,10 +848,13 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                     // API Token Section
                     _buildApiTokenSection(),
 
-                    SizedBox(height: 48),
+                    const SizedBox(height: 48),
+                    _buildAddressSection(),
+
+                    const SizedBox(height: 48),
 
                     // Manual Input Section
-                    Text(
+                    const Text(
                       'Manuell eingeben',
                       style: TextStyle(
                         fontSize: 22,
@@ -693,8 +862,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                         color: Color(0xFF111827),
                       ),
                     ),
-                    SizedBox(height: 8),
-                    Text(
+                    const SizedBox(height: 8),
+                    const Text(
                       'JSON-Daten direkt eingeben',
                       style: TextStyle(
                         fontSize: 15,
@@ -703,7 +872,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                       ),
                     ),
 
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
                     // JSON Input
                     Container(
@@ -711,16 +880,17 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color:
-                              _hasText ? Color(0xFF111827) : Color(0xFFE5E7EB),
+                          color: _hasText
+                              ? const Color(0xFF111827)
+                              : const Color(0xFFE5E7EB),
                           width: _hasText ? 2 : 1,
                         ),
                         boxShadow: [
                           if (_hasText)
                             BoxShadow(
-                              color: Color(0xFF111827).withOpacity(0.1),
+                              color: const Color(0xFF111827).withOpacity(0.1),
                               blurRadius: 20,
-                              offset: Offset(0, 8),
+                              offset: const Offset(0, 8),
                             ),
                         ],
                       ),
@@ -728,8 +898,8 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                         children: [
                           // Header
                           Container(
-                            padding: EdgeInsets.all(20),
-                            decoration: BoxDecoration(
+                            padding: const EdgeInsets.all(20),
+                            decoration: const BoxDecoration(
                               color: Color(0xFFFAFAFA),
                               borderRadius: BorderRadius.only(
                                 topLeft: Radius.circular(15),
@@ -738,7 +908,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                             ),
                             child: Row(
                               children: [
-                                Text(
+                                const Text(
                                   'JSON',
                                   style: TextStyle(
                                     fontSize: 14,
@@ -747,19 +917,19 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                                     letterSpacing: 1,
                                   ),
                                 ),
-                                Spacer(),
+                                const Spacer(),
                                 GestureDetector(
                                   onTap: _pasteFromClipboard,
                                   child: Container(
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Color(0xFF111827),
+                                      color: const Color(0xFF111827),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: Row(
+                                    child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
@@ -787,12 +957,12 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                           // Text Input
                           Container(
                             height: 300,
-                            padding: EdgeInsets.all(20),
+                            padding: const EdgeInsets.all(20),
                             child: TextField(
                               controller: _jsonController,
                               maxLines: null,
                               expands: true,
-                              decoration: InputDecoration(
+                              decoration: const InputDecoration(
                                 border: InputBorder.none,
                                 hintText:
                                     '{\n  "type": "MonthJournalData",\n  "data": {\n    ...\n  }\n}',
@@ -803,7 +973,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                                   height: 1.5,
                                 ),
                               ),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontFamily: 'monospace',
                                 height: 1.5,
@@ -817,27 +987,28 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                     ),
 
                     if (_errorMessage != null) ...[
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Container(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Color(0xFFFEF2F2),
+                          color: const Color(0xFFFEF2F2),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Color(0xFFDC2626).withOpacity(0.2)),
+                            color: const Color(0xFFDC2626).withOpacity(0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.error_outline,
                               color: Color(0xFFDC2626),
                               size: 18,
                             ),
-                            SizedBox(width: 12),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 _errorMessage!,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: Color(0xFFDC2626),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -849,7 +1020,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                       ),
                     ],
 
-                    SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
                     // Action Button
                     Container(
@@ -858,12 +1029,13 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                       child: ElevatedButton(
                         onPressed: _hasText ? _parseAndNavigate : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              _hasText ? Color(0xFF111827) : Color(0xFFE5E7EB),
+                          backgroundColor: _hasText
+                              ? const Color(0xFF111827)
+                              : const Color(0xFFE5E7EB),
                           foregroundColor: Colors.white,
                           elevation: _hasText ? 8 : 0,
                           shadowColor: _hasText
-                              ? Color(0xFF111827).withOpacity(0.3)
+                              ? const Color(0xFF111827).withOpacity(0.3)
                               : null,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -874,18 +1046,54 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: _hasText ? Colors.white : Color(0xFF9CA3AF),
+                            color: _hasText
+                                ? Colors.white
+                                : const Color(0xFF9CA3AF),
                           ),
                         ),
                       ),
                     ),
 
+                    const SizedBox(height: 24),
+
+                    // Reset button (only show if there's any saved data)
+                    if (_currentApiToken != null || _hasText) ...[
+                      Container(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: _showResetDialog,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFDC2626)),
+                            foregroundColor: const Color(0xFFDC2626),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.refresh, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Alle Daten zurücksetzen',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
                     if (_hasText) ...[
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Center(
                         child: TextButton(
                           onPressed: _clearSavedData,
-                          child: Text(
+                          child: const Text(
                             'Eingabe löschen',
                             style: TextStyle(
                               color: Color(0xFF6B7280),
@@ -897,7 +1105,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                       ),
                     ],
 
-                    SizedBox(height: 40),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -912,20 +1120,20 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     final hasToken = _currentApiToken != null && _currentApiToken!.isNotEmpty;
 
     return Container(
-      padding: EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasToken ? Color(0xFF059669) : Color(0xFFE5E7EB),
+          color: hasToken ? const Color(0xFF059669) : const Color(0xFFE5E7EB),
           width: hasToken ? 2 : 1,
         ),
         boxShadow: [
           if (hasToken)
             BoxShadow(
-              color: Color(0xFF059669).withOpacity(0.1),
+              color: const Color(0xFF059669).withOpacity(0.1),
               blurRadius: 20,
-              offset: Offset(0, 8),
+              offset: const Offset(0, 8),
             ),
         ],
       ),
@@ -938,41 +1146,43 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: hasToken ? Color(0xFF059669) : Color(0xFFD1D5DB),
+                  color: hasToken
+                      ? const Color(0xFF059669)
+                      : const Color(0xFFD1D5DB),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Text(
                 hasToken ? 'API-Token aktiv' : 'API-Token',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF111827),
                 ),
               ),
-              Spacer(),
+              const Spacer(),
               if (hasToken)
-                Icon(
+                const Icon(
                   Icons.check_circle,
                   color: Color(0xFF059669),
                   size: 20,
                 ),
             ],
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           if (hasToken) ...[
             // Active token display
             Container(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Color(0xFFF0FDF4),
+                color: const Color(0xFFF0FDF4),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Aktueller Token:',
                     style: TextStyle(
                       fontSize: 12,
@@ -981,10 +1191,10 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                       letterSpacing: 0.5,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     '${_currentApiToken!.substring(0, 8)}${'•' * 12}${_currentApiToken!.substring(_currentApiToken!.length - 4)}',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       fontFamily: 'monospace',
                       color: Color(0xFF374151),
@@ -995,7 +1205,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
               ),
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             // Token actions
             Row(
@@ -1006,7 +1216,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _refreshFromAPI,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF111827),
+                        backgroundColor: const Color(0xFF111827),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -1014,16 +1224,17 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                         ),
                       ),
                       child: _isLoading
-                          ? SizedBox(
+                          ? const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
-                          : Text(
+                          : const Text(
                               'Daten laden',
                               style: TextStyle(
                                 fontSize: 14,
@@ -1033,18 +1244,18 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                     ),
                   ),
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Container(
                   height: 48,
                   child: OutlinedButton(
                     onPressed: () => _showTokenDialog(isEdit: true),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Color(0xFFE5E7EB)),
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
+                    child: const Text(
                       'Bearbeiten',
                       style: TextStyle(
                         fontSize: 14,
@@ -1054,19 +1265,19 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                     ),
                   ),
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Container(
                   height: 48,
                   width: 48,
                   child: IconButton(
                     onPressed: _showRemoveTokenDialog,
-                    icon: Icon(
+                    icon: const Icon(
                       Icons.delete_outline,
                       color: Color(0xFFDC2626),
                       size: 20,
                     ),
                     style: IconButton.styleFrom(
-                      backgroundColor: Color(0xFFFEF2F2),
+                      backgroundColor: const Color(0xFFFEF2F2),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -1077,7 +1288,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
             ),
           ] else ...[
             // No token state
-            Text(
+            const Text(
               'Automatische Dienstplan-Updates aktivieren',
               style: TextStyle(
                 fontSize: 14,
@@ -1086,7 +1297,7 @@ class _RosterInputScreenState extends State<RosterInputScreen>
               ),
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             Container(
               width: double.infinity,
@@ -1094,14 +1305,14 @@ class _RosterInputScreenState extends State<RosterInputScreen>
               child: ElevatedButton(
                 onPressed: () => _showTokenDialog(),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF111827),
+                  backgroundColor: const Color(0xFF111827),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.add, size: 18),
@@ -1115,6 +1326,194 @@ class _RosterInputScreenState extends State<RosterInputScreen>
                     ),
                   ],
                 ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressSection() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _coordinates != null
+              ? const Color(0xFF059669)
+              : const Color(0xFFE5E7EB),
+          width: _coordinates != null ? 2 : 1,
+        ),
+        boxShadow: [
+          if (_coordinates != null)
+            BoxShadow(
+              color: const Color(0xFF059669).withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                color: Color(0xFF111827),
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Standort (Optional)',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const Spacer(),
+              if (_coordinates != null)
+                const Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF059669),
+                  size: 20,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Adresse eingeben für GPS-Koordinaten',
+            style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 20),
+
+          // Address Input Field
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TextField(
+              controller: _addressController,
+              decoration: const InputDecoration(
+                hintText: 'z.B. Flughafen Wien, 1300 Schwechat',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.all(16),
+              ),
+              onSubmitted: (_) => _geocodeAddress(),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Geocode Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _hasAddress && !_isGeocodingLoading
+                  ? _geocodeAddress
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF111827),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isGeocodingLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'GPS-Koordinaten ermitteln',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+
+          // Display coordinates or error
+          if (_coordinates != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'GPS-Koordinaten:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF059669),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Lat: ${_coordinates!['lat']!.toStringAsFixed(6)}\nLon: ${_coordinates!['lon']!.toStringAsFixed(6)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                      color: Color(0xFF374151),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          if (_geocodingError != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFDC2626).withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Color(0xFFDC2626),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _geocodingError!,
+                      style: const TextStyle(
+                        color: Color(0xFFDC2626),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

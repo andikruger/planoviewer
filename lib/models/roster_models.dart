@@ -1,5 +1,7 @@
 // models/roster_models.dart
 
+import '../services/api_service.dart';
+
 class WorkRosterData {
   final Map<String, dynamic> columns;
   final Map<String, ShiftInfo> shiftInfos;
@@ -16,10 +18,7 @@ class WorkRosterData {
       shiftInfos[key] = ShiftInfo.fromJson(value);
     });
 
-    return WorkRosterData(
-      columns: columns,
-      shiftInfos: shiftInfos,
-    );
+    return WorkRosterData(columns: columns, shiftInfos: shiftInfos);
   }
 
   List<WorkDay> getDays() {
@@ -32,9 +31,7 @@ class WorkRosterData {
 
     // Get all shift interval columns
     final allShiftColumns = columns.values
-        .where(
-          (col) => col['itemType'] == 'MonthJournalDataIntervals',
-        )
+        .where((col) => col['itemType'] == 'MonthJournalDataIntervals')
         .toList();
 
     final hoursItems = hoursColumn['items'] as List;
@@ -42,8 +39,8 @@ class WorkRosterData {
     for (int i = 0; i < hoursItems.length; i++) {
       final hoursWorked = hoursItems[i]['value'] ?? '0:00';
 
-      // Collect all shifts from all interval columns for this day
-      final allShifts = <WorkShift>[];
+      // Collect all intervals from all columns for this day
+      final allIntervals = <Map<String, dynamic>>[];
 
       for (final shiftColumn in allShiftColumns) {
         final shiftItems = shiftColumn['items'] as List;
@@ -51,80 +48,48 @@ class WorkRosterData {
           final shiftData = shiftItems[i] as Map<String, dynamic>;
           final intervals = shiftData['intervals'] as List? ?? [];
 
+          // Convert to the format expected by ApiService
           for (final interval in intervals) {
-            allShifts.add(WorkShift(
-              name: interval['name'] ?? '',
-              interval: interval['interval'] ?? '',
-            ));
+            allIntervals.add({
+              'name': interval['name'] ?? '',
+              'interval': interval['interval'] ?? '',
+            });
           }
         }
       }
 
-      // Merge consecutive Arbeitszeit shifts
-      final mergedShifts = _mergeConsecutiveShifts(allShifts);
+      // Use ApiService to process the intervals
+      final result = ApiService.processRosterDay(allIntervals);
+      final timeRange = result['timeRange'] as String;
+      final hasWork = result['hasWork'] as bool;
 
-      days.add(WorkDay(
-        hoursWorked: hoursWorked,
-        shifts: mergedShifts,
-      ));
-    }
-
-    return days;
-  }
-
-  List<WorkShift> _mergeConsecutiveShifts(List<WorkShift> shifts) {
-    if (shifts.isEmpty) return shifts;
-
-    final merged = <WorkShift>[];
-    final arbeitszeit = <WorkShift>[];
-
-    for (final shift in shifts) {
-      if (shift.name == 'Arbeitszeit') {
-        arbeitszeit.add(shift);
-      } else {
-        // If we have accumulated Arbeitszeit shifts, merge them first
-        if (arbeitszeit.isNotEmpty) {
-          merged.add(_mergeArbeitszeitShifts(arbeitszeit));
-          arbeitszeit.clear();
+      // Convert back to WorkShift format for compatibility
+      final shifts = <WorkShift>[];
+      if (hasWork && timeRange.isNotEmpty) {
+        shifts.add(WorkShift(name: 'Arbeitszeit', interval: timeRange));
+      } else if (!hasWork && allIntervals.isNotEmpty) {
+        // Add RT or other non-work shifts for display
+        for (final interval in allIntervals) {
+          final name = interval['name'] as String;
+          final intervalStr = interval['interval'] as String;
+          if (name == 'RT' || intervalStr.contains('12:00 PM-12:01 PM')) {
+            shifts.add(WorkShift(name: name, interval: intervalStr));
+            break; // Only need one to show it's a day off
+          }
         }
-        merged.add(shift);
       }
-    }
 
-    // Don't forget any remaining Arbeitszeit shifts
-    if (arbeitszeit.isNotEmpty) {
-      merged.add(_mergeArbeitszeitShifts(arbeitszeit));
-    }
-
-    return merged;
-  }
-
-  WorkShift _mergeArbeitszeitShifts(List<WorkShift> shifts) {
-    if (shifts.length == 1) return shifts.first;
-
-    // Sort shifts by start time to ensure proper merging
-    shifts.sort((a, b) {
-      final timeA = a.interval.split('-')[0];
-      final timeB = b.interval.split('-')[0];
-      return timeA.compareTo(timeB);
-    });
-
-    // Get start time from first shift and end time from last shift
-    final firstInterval = shifts.first.interval.split('-');
-    final lastInterval = shifts.last.interval.split('-');
-
-    if (firstInterval.length >= 2 && lastInterval.length >= 2) {
-      final startTime = firstInterval[0];
-      final endTime = lastInterval[1];
-
-      return WorkShift(
-        name: 'Arbeitszeit',
-        interval: '$startTime-$endTime',
+      days.add(
+        WorkDay(
+          hoursWorked: hoursWorked,
+          shifts: shifts,
+          timeRange: timeRange, // Add this property
+          hasWork: hasWork, // Add this property
+        ),
       );
     }
 
-    // Fallback: return first shift if parsing fails
-    return shifts.first;
+    return days;
   }
 
   String getTotalHours() {
@@ -170,11 +135,18 @@ class ShiftInfo {
 class WorkDay {
   final String hoursWorked;
   final List<WorkShift> shifts;
+  final String timeRange; // Add this property
+  final bool hasWork; // Add this property
 
-  WorkDay({required this.hoursWorked, required this.shifts});
-
-  bool get hasWork =>
-      hoursWorked != '0:00' && hoursWorked.isNotEmpty || shifts.isNotEmpty;
+  WorkDay({
+    required this.hoursWorked,
+    required this.shifts,
+    this.timeRange = '', // Default empty
+    bool? hasWork, // Make nullable to calculate if not provided
+  }) : hasWork =
+           hasWork ??
+           (hoursWorked != '0:00' && hoursWorked.isNotEmpty) ||
+               shifts.isNotEmpty;
 }
 
 class WorkShift {
