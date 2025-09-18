@@ -55,6 +55,11 @@ class ExportService {
     }
   }
 
+  DateTime _calculateSafeDate(int dayIndex) {
+    // Use DateTime constructor instead of add() to avoid DST issues
+    return DateTime(startDate.year, startDate.month, startDate.day + dayIndex);
+  }
+
   Future<void> _exportRosterToPDFList(
     BuildContext context,
     WorkRosterData rosterData,
@@ -533,7 +538,7 @@ class ExportService {
     // CSV Rows
     for (int i = 0; i < days.length; i++) {
       final day = days[i];
-      final actualDate = startDate.add(Duration(days: i));
+      final actualDate = _calculateSafeDate(i); // DST-safe calculation
       final dayName = _getDayNameFull(actualDate.weekday);
       final isWeekend = actualDate.weekday >= 6;
 
@@ -590,7 +595,7 @@ class ExportService {
     // Events
     for (int i = 0; i < days.length; i++) {
       final day = days[i];
-      final actualDate = startDate.add(Duration(days: i));
+      final actualDate = _calculateSafeDate(i); // DST-safe calculation
 
       if (day.shifts.isNotEmpty) {
         for (final shift in day.shifts) {
@@ -1039,7 +1044,9 @@ class ExportService {
                 // Data rows
                 ...List.generate(days.length, (index) {
                   final day = days[index];
-                  final actualDate = startDate.add(Duration(days: index));
+                  final actualDate = _calculateSafeDate(
+                    index,
+                  ); // DST-safe calculation
                   final dayName = _getDayNameShort(actualDate.weekday);
                   final isWeekend = actualDate.weekday >= 6;
 
@@ -1127,7 +1134,7 @@ class ExportService {
     // Group days by month
     final monthGroups = <int, List<MapEntry<int, WorkDay>>>{};
     for (int i = 0; i < days.length; i++) {
-      final date = startDate.add(Duration(days: i));
+      final date = _calculateSafeDate(i); // DST-safe calculation
       monthGroups.putIfAbsent(date.month, () => []).add(MapEntry(i, days[i]));
     }
 
@@ -1252,9 +1259,9 @@ class ExportService {
     final weeks = <pw.TableRow>[];
     final dayMap = <int, WorkDay>{};
 
-    // Create lookup map
+    // Create lookup map with DST-safe calculation
     for (final entry in monthDays) {
-      final date = startDate.add(Duration(days: entry.key));
+      final date = _calculateSafeDate(entry.key); // DST-safe calculation
       dayMap[date.day] = entry.value;
     }
 

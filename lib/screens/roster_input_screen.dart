@@ -440,11 +440,13 @@ class _RosterInputScreenState extends State<RosterInputScreen>
     final String startDateStr;
     final String endDateStr;
 
-    if (now.day < 20) {
-      startDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
-      endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
-    } else {
+    if (now.day < 15) {
+      // 1st to 14th: Get current month's roster
       startDateStr = _formatDate(DateTime(now.year, now.month, 1));
+      endDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
+    } else {
+      // 15th onwards: Get next month's roster
+      startDateStr = _formatDate(DateTime(now.year, now.month + 1, 1));
       endDateStr = _formatDate(DateTime(now.year, now.month + 2, 1));
     }
 

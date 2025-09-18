@@ -107,8 +107,11 @@ class _DayCardState extends State<DayCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isWeekend = _isWeekend(widget.dayNumber);
-    final dayName = _getDayName(widget.dayNumber);
+    print(
+      'DayCard ${widget.dayNumber}: actualDate = ${widget.actualDate} (${widget.actualDate?.weekday})',
+    );
+    final isWeekend = _isWeekend();
+    final dayName = _getDayName();
     final dateText = _getDateText();
 
     return Container(
@@ -413,34 +416,9 @@ class _DayCardState extends State<DayCard> {
       return '${widget.actualDate!.day}. ${monthNames[widget.actualDate!.month]} ${widget.actualDate!.year}';
     }
 
-    final now = DateTime.now();
-    final monthNames = [
-      '',
-      'Januar',
-      'Februar',
-      'März',
-      'April',
-      'Mai',
-      'Juni',
-      'Juli',
-      'August',
-      'September',
-      'Oktober',
-      'November',
-      'Dezember',
-    ];
-
-    int estimatedMonth = now.month;
-    int estimatedYear = now.year;
-
-    if (now.day >= 15) {
-      if (widget.dayNumber < 15 && now.day > 20) {
-        estimatedMonth = now.month == 12 ? 1 : now.month + 1;
-        if (now.month == 12) estimatedYear = now.year + 1;
-      }
-    }
-
-    return '${widget.dayNumber}. ${monthNames[estimatedMonth]} $estimatedYear';
+    // If no actualDate provided, we can't determine the correct month
+    // This should be passed down from the parent widget
+    return 'Tag ${widget.dayNumber}';
   }
 
   Widget _buildTransportButton(BuildContext context) {
@@ -656,22 +634,30 @@ class _DayCardState extends State<DayCard> {
     );
   }
 
-  String _getDayName(int dayNumber) {
-    final days = [
-      'Montag',
-      'Dienstag',
-      'Mittwoch',
-      'Donnerstag',
-      'Freitag',
-      'Samstag',
-      'Sonntag',
-    ];
-    return days[(dayNumber - 1) % 7];
+  String _getDayName() {
+    if (widget.actualDate != null) {
+      final days = [
+        'Montag',
+        'Dienstag',
+        'Mittwoch',
+        'Donnerstag',
+        'Freitag',
+        'Samstag',
+        'Sonntag',
+      ];
+      return days[widget.actualDate!.weekday - 1]; // weekday is 1-based
+    }
+
+    // Fallback
+    return 'Unbekannt';
   }
 
-  bool _isWeekend(int dayNumber) {
-    final dayOfWeek = (dayNumber - 1) % 7;
-    return dayOfWeek == 5 || dayOfWeek == 6;
+  bool _isWeekend() {
+    if (widget.actualDate != null) {
+      return widget.actualDate!.weekday >= 6; // 6 = Saturday, 7 = Sunday
+    }
+
+    return false;
   }
 
   Color _getShiftAccentColor(String shiftName) {

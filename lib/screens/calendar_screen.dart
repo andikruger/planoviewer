@@ -61,13 +61,6 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
 
     _animationController.forward();
-
-    print('=== CALENDAR DEBUG INFO ===');
-    print('Start date: ${widget.startDate}');
-    print('End date: ${widget.endDate}');
-    print(
-      'Date range: ${widget.endDate.difference(widget.startDate).inDays} days',
-    );
   }
 
   @override
@@ -82,8 +75,6 @@ class _CalendarScreenState extends State<CalendarScreen>
     final allDays = widget.rosterData.getDays();
     final visibleDays = _getVisibleDays(allDays);
     final headerText = _getHeaderText();
-
-    print('All days: ${allDays.length}, Visible days: ${visibleDays.length}');
 
     return Scaffold(
       backgroundColor: Color(0xFFFAFAFA),
@@ -381,10 +372,6 @@ class _CalendarScreenState extends State<CalendarScreen>
     final totalDays = endDate.difference(startDate).inDays + 1;
     final weeksNeeded = ((firstWeekday - 1 + totalDays) / 7).ceil();
 
-    print('Calendar grid: ${weeksNeeded} weeks');
-    print('Start: $startDate, End: $endDate');
-    print('Calendar start: $calendarStart');
-
     return _buildCalendarWithDividers(
       calendarStart,
       startDate,
@@ -665,7 +652,6 @@ class _CalendarScreenState extends State<CalendarScreen>
           ? formatted24h.substring(0, 8)
           : formatted24h;
     } catch (e) {
-      print('Error extracting compact time from "$interval": $e');
       return interval.length > 8 ? interval.substring(0, 8) : interval;
     }
   }
@@ -993,40 +979,13 @@ class _CalendarScreenState extends State<CalendarScreen>
 
   /// Filter days based on roster release schedule
   List<WorkDay> _getVisibleDays(List<WorkDay> allDays) {
-    final now = DateTime.now();
-
-    // Get the actual start and end months from the roster data
-    final rosterStartMonth = widget.startDate.month;
-    final rosterStartYear = widget.startDate.year;
-
-    if (now.day < 15) {
-      // Before 15th: Show only the first month of the roster period
-      final firstMonthDays = <WorkDay>[];
-
-      for (int i = 0; i < allDays.length; i++) {
-        final dayDate = widget.startDate.add(Duration(days: i));
-        if (dayDate.month == rosterStartMonth &&
-            dayDate.year == rosterStartYear) {
-          firstMonthDays.add(allDays[i]);
-        }
-      }
-
-      print(
-        'Filtering to first roster month (${rosterStartMonth}): ${firstMonthDays.length} days',
-      );
-      return firstMonthDays;
-    } else {
-      // 15th and after: Show all days in the roster period
-      print('Showing all roster days: ${allDays.length} days');
-      return allDays;
-    }
+    return allDays;
   }
 
   String _getHeaderText() {
-    final now = DateTime.now();
     final monthNames = [
       '',
-      'JANUAR', // or 'JANUAR' for display, 'Januar' for calendar
+      'JANUAR',
       'FEBRUAR',
       'MAERZ',
       'APRIL',
@@ -1040,21 +999,8 @@ class _CalendarScreenState extends State<CalendarScreen>
       'DEZEMBER',
     ];
 
-    final rosterStartMonth = widget.startDate.month;
-    final rosterEndDate = widget.endDate.subtract(const Duration(days: 1));
-    final rosterEndMonth = rosterEndDate.month;
-
-    if (now.day < 15) {
-      // Before 15th: Show only first month of roster
-      return 'DIENSTPLAN ${monthNames[rosterStartMonth]}'; // or 'KALENDER' for calendar screen
-    } else {
-      // 15th and after: Show full range
-      if (rosterStartMonth == rosterEndMonth) {
-        return 'DIENSTPLAN ${monthNames[rosterStartMonth]}';
-      } else {
-        return 'DIENSTPLAN ${monthNames[rosterStartMonth]}-${monthNames[rosterEndMonth]}';
-      }
-    }
+    // The start date already represents the correct month we fetched
+    return 'DIENSTPLAN ${monthNames[widget.startDate.month]}';
   }
 
   /// Calculate total hours for visible days
